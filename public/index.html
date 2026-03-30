@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rin Video Server</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main id="app">
+        <section id="list-container">
+            <h1>Mis Videos</h1>
+            <ul id="video-list">
+                <p>Cargando biblioteca...</p>
+            </ul>
+        </section>
+
+        <section id="player-container" class="hidden">
+            <button id="back-btn">← Volver a la lista</button>
+            <div class="video-wrapper">
+                <video id="main-player" controls>
+                    <source src="" type="video/mp4">
+                    Tu navegador no soporta video.
+                </video>
+            </div>
+            <h2 id="now-playing">Reproduciendo...</h2>
+        </section>
+    </main>
+
+    <script src="main.js"></script>
+</body>
+</html>
