@@ -2,46 +2,54 @@ import ffmpegPath from 'ffmpeg-static';
 import ffmpeg from 'fluent-ffmpeg';
 import path from 'path';
 import fs from 'fs';
-import { videoFolder,thumbFolder } from '../utils/alias.js';
-
+import { videoFolder, thumbFolder } from '../utils/alias.js';
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
+// 🔹 mismo normalizador
+const normalize = name => name.replace(/\s+/g, "_");
 
-/**
- * Genera una miniatura de un video.
- * @param {string} videoName - Nombre del archivo de video.
- * @param {string|number} time - Tiempo del video para capturar (por defecto 5 segundos).
- */
-export const generateThumbnail = (videoName, time = 60) => {
+export const generateThumbnail = (videoName, subPath = '', time = 60) => {
     return new Promise((resolve, reject) => {
-
+        // Construir ruta completa del video
+        let videoPath;
+        if (subPath) {
+            videoPath = path.join(videoFolder, subPath, videoName);
+        } else {
+            videoPath = path.join(videoFolder, videoName);
+        }
         
-        // Nombre de salida: "nombre_video.jpg" (sin la extensión original del video)
-        const baseName = path.parse(videoName).name;
+        // Construir nombre y ruta de la thumbnail
+        const normalized = normalize(videoName);
+        const baseName = path.parse(normalized).name;
         const thumbName = `${baseName}.jpg`;
         const thumbPath = path.join(thumbFolder, thumbName);
-        const videoPath = path.join(videoFolder, videoName);
-
-        // 1. Si la miniatura ya existe, resolver inmediatamente
+        
+        console.log("📂 Video path:", videoPath);
+        console.log("📸 Thumb path:", thumbPath);
+        console.log("✅ Video existe?:", fs.existsSync(videoPath));
+        
+        // Si la thumbnail ya existe, no la regeneres
         if (fs.existsSync(thumbPath)) {
+            console.log("⏭️ Thumbnail ya existe:", thumbName);
             return resolve(thumbName);
         }
-
-        // 2. Verificar que el video de origen exista
+        
+        // Verificar que el video existe
         if (!fs.existsSync(videoPath)) {
-            return reject(new Error(`Archivo de video no encontrado: ${videoPath}`));
+            return reject(new Error(`Archivo no encontrado: ${videoPath}`));
         }
-
-        // 3. Asegurar que la carpeta de destino exista
-        if (!fs.existsSync(thumbFolder)) {
-            fs.mkdirSync(thumbFolder, { recursive: true });
-        }
-
-        // 4. Ejecutar FFmpeg
+        
+        // Generar thumbnail con ffmpeg
         ffmpeg(videoPath)
-            .on('end', () => resolve(thumbName))
-            .on('error', (err) => reject(err))
+            .on('end', () => {
+                console.log("✅ Thumbnail generada:", thumbName);
+                resolve(thumbName);
+            })
+            .on('error', (err) => {
+                console.error("❌ Error ffmpeg:", err.message);
+                reject(err);
+            })
             .screenshots({
                 timestamps: [time],
                 filename: thumbName,

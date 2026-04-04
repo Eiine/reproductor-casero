@@ -144,3 +144,33 @@ video {
     color: var(--primary-purple);
     opacity: 0.6;
 }
+
+.folder-item {
+    background: #2a2a2a;
+    cursor: pointer;
+    padding: 0.8rem;
+    border-radius: 8px;
+    margin: 0.5rem 0;
+}
+
+.back-folder {
+    background: #1a3a1a;
+    font-weight: bold;
+}
+
+.folder-item {
+    background: #2a2a2a;
+    padding: 0.8rem;
+    margin: 0.5rem 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.folder-item:hover {
+    background: #3a3a3a;
+}
+
+.up-folder {
+    background: #1a3a1a;
+    font-weight: bold;
+}

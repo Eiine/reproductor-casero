@@ -1,42 +1,36 @@
 import fs from 'fs';
 import path from 'path';
-import { projectRoot,thumbFolder,videoFolder } from '../utils/alias.js';
+import { thumbFolder } from '../utils/alias.js';
 
+// 🔹 mismo normalizador
+const normalize = name => name.replace(/\s+/g, "_");
 
-export const cleanOrphanThumbnails = () => {
-    return new Promise((resolve, reject) => {
+export const cleanOrphanThumbnails = (baseNames) => {
+    try {
+        if (!fs.existsSync(thumbFolder)) return 0;
 
-        try {
-            // 1. Si no hay carpeta de miniaturas, no hay nada que limpiar
-            if (!fs.existsSync(thumbFolder)) return resolve();
+        const videoSet = new Set(
+            baseNames.map(name => normalize(name))
+        );
 
-            // 2. Obtenemos lista de videos actuales (solo nombres base sin extensión)
-            const videoFiles = fs.readdirSync(videoFolder).map(f => path.parse(f).name);
-            
-            // 3. Leemos las miniaturas existentes
-            const thumbFiles = fs.readdirSync(thumbFolder);
+        const thumbFiles = fs.readdirSync(thumbFolder);
 
-            let deletedCount = 0;
+        let deletedCount = 0;
 
-            thumbFiles.forEach(thumb => {
-                const thumbBaseName = path.parse(thumb).name;
+        thumbFiles.forEach(thumb => {
+            const thumbBaseName = path.parse(thumb).name;
 
-                // 4. Si la miniatura no tiene un video que coincida, al tacho
-                if (!videoFiles.includes(thumbBaseName)) {
-                    fs.unlinkSync(path.join(thumbFolder, thumb));
-                    deletedCount++;
-                    console.log(`[GC] 🗑️ Miniatura eliminada: ${thumb}`);
-                }
-            });
-
-            if (deletedCount > 0) {
-                console.log(`[GC] ✨ Limpieza completada. Se eliminaron ${deletedCount} archivos.`);
+            if (!videoSet.has(thumbBaseName)) {
+                fs.unlinkSync(path.join(thumbFolder, thumb));
+                deletedCount++;
+                console.log(`[GC] 🗑️ Eliminada: ${thumb}`);
             }
-            
-            resolve(deletedCount);
-        } catch (error) {
-            console.error("[GC] ❌ Error durante la limpieza:", error);
-            reject(error);
-        }
-    });
+        });
+
+        return deletedCount;
+
+    } catch (error) {
+        console.error("[GC] ❌", error);
+        return 0;
+    }
 };
