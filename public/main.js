@@ -5,13 +5,11 @@ const videoPlayer = document.getElementById('main-player');
 const backBtn = document.getElementById('back-btn');
 const nowPlayingTitle = document.getElementById('now-playing');
 
-// 1. Obtener la lista de videos al cargar la página
-// 1. Obtener la lista de videos al cargar la página
+// --- 1. Obtener la lista de videos al cargar la página ---
 async function loadVideos() {
     try {
-        const response = await fetch('http://localhost:3000/getVideos');
-        const videos = await response.json(); // Ahora recibimos [{name, displayName, thumbnail}, ...]
-        
+        const response = await fetch('/getVideos');
+        const videos = await response.json(); // [{name, displayName, thumbnail}, ...]
         videoList.innerHTML = ''; 
 
         videos.forEach((video, index) => {
@@ -20,37 +18,30 @@ async function loadVideos() {
 
             // --- IMAGEN DE MINIATURA ---
             const img = document.createElement('img');
-            // Usamos la propiedad .thumbnail que viene del servidor
-            img.src = video.thumbnail; 
+            img.src = video.thumbnail;
             img.className = 'thumb-img';
             
-            // Si la miniatura aún no existe (FFmpeg procesando), 
-            // usamos un color de fondo o un placeholder local
             img.onerror = () => { 
-                img.style.display = 'none'; // Ocultamos la imagen rota
-                li.classList.add('loading-thumb'); // Podemos darle un estilo especial en CSS
+                img.style.display = 'none';
+                li.classList.add('loading-thumb');
             };
 
             // --- TÍTULO ---
             const title = document.createElement('div');
             title.className = 'video-title';
-            // Usamos displayName para que se vea "Pelicula" en vez de "Pelicula.mkv"
-            title.textContent = video.displayName; 
+            title.textContent = video.displayName;
 
             li.appendChild(img);
             li.appendChild(title);
 
             // --- EVENTOS ---
-            // IMPORTANTE: Al hacer clic usamos video.name (el nombre real con extensión)
             li.onclick = () => startPlayer(video.name);
-            
             li.onkeydown = (e) => { 
                 if (e.key === 'Enter') startPlayer(video.name); 
             };
 
             videoList.appendChild(li);
-            
-            // Foco automático al primer elemento para el control remoto
+
             if (index === 0) li.focus();
         });
     } catch (error) {
@@ -59,18 +50,20 @@ async function loadVideos() {
     }
 }
 
-// 2. Función para mostrar el reproductor
+// --- 2. Función para mostrar el reproductor ---
 function startPlayer(name) {
-    listContainer.classList.add('hidden');
-    playerContainer.classList.remove('hidden');
+    // Ocultar la lista completamente
+    listContainer.style.display = 'none';
+    // Mostrar el reproductor
+    playerContainer.style.display = 'block';
     
-    // Cambiamos el título
+    // Cambiar el título
     nowPlayingTitle.textContent = `Viendo: ${name}`;
     
-    // Seteamos la fuente del video (usando encodeURIComponent por si hay espacios)
-    videoPlayer.src = `http://localhost:3000/playVideo/${encodeURIComponent(name)}`;
+    // Setear la fuente del video
+    videoPlayer.src = `/playVideo/${encodeURIComponent(name)}`;
     
-    // Enfocamos el botón de volver para que sea fácil salir con el control
+    // Enfocar el botón de volver
     backBtn.focus();
     
     videoPlayer.play().catch(error => {
@@ -78,28 +71,28 @@ function startPlayer(name) {
     });
 }
 
-// 3. Función para regresar a la lista
-backBtn.onclick = () => {
-    exitPlayer();
-};
-
-// Soporte para tecla "Escape" o botón "Back" del control para salir
-window.onkeydown = (e) => {
-    if (e.key === 'Escape' && !playerContainer.classList.contains('hidden')) {
-        exitPlayer();
-    }
-};
-
+// --- 3. Función para regresar a la lista ---
 function exitPlayer() {
     videoPlayer.pause();
     videoPlayer.src = ""; // Corta el stream inmediatamente
-    playerContainer.classList.add('hidden');
-    listContainer.classList.remove('hidden');
+    // Ocultar reproductor
+    playerContainer.style.display = 'none';
+    // Mostrar lista
+    listContainer.style.display = 'block';
     
-    // Al volver, intentamos recuperar el foco en la lista
+    // Recuperar foco en el primer item de la lista
     const firstItem = videoList.querySelector('li');
     if (firstItem) firstItem.focus();
 }
 
-// Iniciar app
+// --- Eventos de navegación ---
+backBtn.onclick = () => exitPlayer();
+
+window.onkeydown = (e) => {
+    if (e.key === 'Escape' && playerContainer.style.display !== 'none') {
+        exitPlayer();
+    }
+};
+
+// --- Iniciar app ---
 loadVideos();

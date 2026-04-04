@@ -88,6 +88,7 @@ li:focus .video-title, li:hover .video-title {
 
 #player-container {
     animation: fadeIn 0.4s ease-out;
+    
 }
 
 #back-btn {
@@ -108,20 +109,18 @@ li:focus .video-title, li:hover .video-title {
     color: white;
     box-shadow: 0 0 15px var(--primary-purple);
 }
-
 .video-wrapper {
     background: black;
     border: 3px solid var(--primary-purple);
     border-radius: 15px;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: 0 0 40px rgba(157, 78, 221, 0.3);
-    max-height: 80vh;
 }
 
 video {
-    width: 100%;
-    height: auto;
-    display: block;
+    width: 800px;
+    height: 300px;
+    display: flex;
 }
 
 /* Animación de entrada */

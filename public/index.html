@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rin Video Server</title>
+    <title>Video Server</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,16 +14,15 @@
                 <p>Cargando biblioteca...</p>
             </ul>
         </section>
-
         <section id="player-container" class="hidden">
             <button id="back-btn">← Volver a la lista</button>
-            <div class="video-wrapper">
+            <h2 id="now-playing">Reproduciendo...</h2>
                 <video id="main-player" controls>
                     <source src="" type="video/mp4">
                     Tu navegador no soporta video.
                 </video>
-            </div>
-            <h2 id="now-playing">Reproduciendo...</h2>
+            
+            
         </section>
     </main>
 
