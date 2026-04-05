@@ -6,12 +6,13 @@ import path from "path"
 import fs from "fs"
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegStatic from 'ffmpeg-static';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 import util from 'util';
 import { exec } from 'child_process';
 ffmpeg.setFfmpegPath(ffmpegStatic);
 const execPromise = util.promisify(exec);
 ffmpeg.setFfmpegPath(ffmpegStatic);
-
+ffmpeg.setFfprobePath(ffprobeInstaller.path);
 // En tu controller
 export const getVideos = async (req, res) => {
   try {
@@ -53,7 +54,6 @@ export const getVideos = async (req, res) => {
     
     // Mapear videos
     const videoData = data.videos.map(file => {
-      enqueueThumbnail(file.name);
        enqueueThumbnail(file.name, subPath);  // ← pasar subPath
         return {
     ...file,  // ← expande las propiedades de file (name, displayName)

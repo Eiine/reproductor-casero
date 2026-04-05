@@ -6,50 +6,24 @@ import { videoFolder, thumbFolder } from '../utils/alias.js';
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// 🔹 mismo normalizador
-const normalize = name => name.replace(/\s+/g, "_");
 
-export const generateThumbnail = (videoName, subPath = '', time = 60) => {
+export const generateThumbnail = (videoName, subPath = '', time = 10) => {
     return new Promise((resolve, reject) => {
-        // Construir ruta completa del video
-        let videoPath;
-        if (subPath) {
-            videoPath = path.join(videoFolder, subPath, videoName);
-        } else {
-            videoPath = path.join(videoFolder, videoName);
-        }
+        // 1. Usar path.join de forma limpia
+        const videoPath = path.join(videoFolder, subPath, videoName);
         
-        // Construir nombre y ruta de la thumbnail
-        const normalized = normalize(videoName);
-        const baseName = path.parse(normalized).name;
+        // 2. IMPORTANTE: Si usas normalización, el frontend debe saberlo.
+        // Recomiendo NO normalizar aquí si mapDirectory ya te da un nombre limpio.
+        const baseName = path.parse(videoName).name; 
         const thumbName = `${baseName}.jpg`;
         const thumbPath = path.join(thumbFolder, thumbName);
-        
-        console.log("📂 Video path:", videoPath);
-        console.log("📸 Thumb path:", thumbPath);
-        console.log("✅ Video existe?:", fs.existsSync(videoPath));
-        
-        // Si la thumbnail ya existe, no la regeneres
-        if (fs.existsSync(thumbPath)) {
-            console.log("⏭️ Thumbnail ya existe:", thumbName);
-            return resolve(thumbName);
-        }
-        
-        // Verificar que el video existe
-        if (!fs.existsSync(videoPath)) {
-            return reject(new Error(`Archivo no encontrado: ${videoPath}`));
-        }
-        
-        // Generar thumbnail con ffmpeg
+
+        if (fs.existsSync(thumbPath)) return resolve(thumbName);
+        if (!fs.existsSync(videoPath)) return reject(new Error(`No existe: ${videoPath}`));
+
         ffmpeg(videoPath)
-            .on('end', () => {
-                console.log("✅ Thumbnail generada:", thumbName);
-                resolve(thumbName);
-            })
-            .on('error', (err) => {
-                console.error("❌ Error ffmpeg:", err.message);
-                reject(err);
-            })
+            .on('end', () => resolve(thumbName))
+            .on('error', (err) => reject(err))
             .screenshots({
                 timestamps: [time],
                 filename: thumbName,
