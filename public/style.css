@@ -174,3 +174,38 @@ video {
     background: #1a3a1a;
     font-weight: bold;
 }
+
+/* Navegación */
+.nav-bar {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 0.5rem;
+    margin-bottom: 2rem;
+    display: flex;
+    gap: 0.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.nav-btn {
+    background: transparent;
+    color: var(--text-color);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    flex: 1;
+}
+
+.nav-btn:hover {
+    background: rgba(157, 78, 221, 0.2);
+    color: var(--glow-purple);
+}
+
+.nav-btn.active {
+    background: var(--primary-purple);
+    color: white;
+    box-shadow: 0 0 15px rgba(157, 78, 221, 0.3);
+}

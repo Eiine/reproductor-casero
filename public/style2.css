@@ -1,0 +1,495 @@
+:root {
+    --bg-color: #0d0d0d;
+    --card-bg: #1a1a1a;
+    --primary-purple: #9d4edd;
+    --glow-purple: #c8b6ff;
+    --text-color: #e0e0e0;
+    --error-red: #cf6679;
+    --success-green: #4caf50;
+    --border-color: #2a2a2a;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+#app {
+    width: 100%;
+    max-width: 1100px;
+}
+
+h1 {
+    color: var(--primary-purple);
+    text-shadow: 0 0 10px rgba(157, 78, 221, 0.5);
+    border-bottom: 2px solid var(--primary-purple);
+    padding-bottom: 10px;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+h2 {
+    color: var(--glow-purple);
+    font-size: 1.5rem;
+    margin: 20px 0;
+    border-left: 4px solid var(--primary-purple);
+    padding-left: 15px;
+}
+
+/* --- SECCIÓN DE SUBIDA --- */
+.upload-section {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 30px;
+    margin-bottom: 30px;
+    border: 1px solid var(--border-color);
+}
+
+.upload-area {
+    border: 3px dashed var(--primary-purple);
+    border-radius: 15px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(157, 78, 221, 0.05);
+}
+
+.upload-area:hover {
+    border-color: var(--glow-purple);
+    background: rgba(157, 78, 221, 0.1);
+    transform: translateY(-2px);
+}
+
+.upload-area.drag-over {
+    border-color: var(--success-green);
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.upload-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+}
+
+.upload-area h3 {
+    color: var(--glow-purple);
+    margin-bottom: 10px;
+}
+
+.upload-area p {
+    color: #888;
+    font-size: 0.9rem;
+}
+
+.file-info {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(157, 78, 221, 0.1);
+    border-radius: 10px;
+    display: none;
+    border-left: 3px solid var(--primary-purple);
+}
+
+.file-info.show {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+.file-name, .file-size {
+    margin: 5px 0;
+    font-size: 0.95rem;
+}
+
+/* Selección de carpeta */
+.folder-selection {
+    margin: 20px 0;
+}
+
+.folder-selection label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: var(--glow-purple);
+}
+
+.folder-options {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.folder-btn {
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.folder-btn:hover {
+    border-color: var(--primary-purple);
+    transform: translateY(-2px);
+}
+
+.folder-btn.active {
+    background: var(--primary-purple);
+    color: white;
+    border-color: var(--primary-purple);
+    box-shadow: 0 0 15px rgba(157, 78, 221, 0.3);
+}
+
+.existing-folders, .new-folder-input {
+    margin-top: 15px;
+    animation: fadeIn 0.3s ease;
+}
+
+.folder-select, .folder-input {
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.folder-select:focus, .folder-input:focus {
+    outline: none;
+    border-color: var(--primary-purple);
+    box-shadow: 0 0 10px rgba(157, 78, 221, 0.3);
+}
+
+/* Botón de subida */
+.upload-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--primary-purple), #7b2cbf);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s;
+    margin-top: 10px;
+}
+
+.upload-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(157, 78, 221, 0.5);
+}
+
+.upload-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Barra de progreso */
+.progress-container {
+    margin-top: 20px;
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 30px;
+    background: var(--bg-color);
+    border-radius: 15px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-purple), var(--glow-purple));
+    width: 0%;
+    transition: width 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.progress-status {
+    text-align: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--glow-purple);
+}
+
+/* Mensajes */
+.message {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 10px;
+    display: none;
+    animation: slideIn 0.3s ease;
+}
+
+.message.success {
+    background: rgba(76, 175, 80, 0.2);
+    color: var(--success-green);
+    border: 1px solid var(--success-green);
+    display: block;
+}
+
+.message.error {
+    background: rgba(207, 102, 121, 0.2);
+    color: var(--error-red);
+    border: 1px solid var(--error-red);
+    display: block;
+}
+
+/* --- LISTA DE VIDEOS (CUADRÍCULA) --- */
+ul#video-list {
+    list-style: none;
+    padding: 20px 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 25px;
+}
+
+li {
+    background: var(--card-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer;
+    border: 2px solid transparent;
+    display: flex;
+    flex-direction: column;
+}
+
+li:hover, li:focus {
+    outline: none;
+    transform: scale(1.08);
+    background: #252525;
+    border-color: var(--primary-purple);
+    box-shadow: 0 0 25px rgba(157, 78, 221, 0.6);
+    z-index: 10;
+}
+
+li:hover .video-title, li:focus .video-title {
+    color: var(--glow-purple);
+}
+
+/* Miniatura */
+.thumb-img {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    background-color: #000;
+    display: block;
+}
+
+/* Título del video */
+.video-title {
+    padding: 12px;
+    font-size: 0.95rem;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-color);
+}
+
+/* Loading para thumbnails */
+.loading-thumb {
+    background: linear-gradient(45deg, #1a1a1a, #252525);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 140px;
+}
+
+.loading-thumb::after {
+    content: "🎬 Generando...";
+    font-size: 0.8rem;
+    color: var(--primary-purple);
+    opacity: 0.6;
+}
+
+/* Navegación de carpetas */
+.folder-nav {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    border: 1px solid var(--border-color);
+}
+
+.folder-nav-item {
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.folder-nav-item:hover {
+    border-color: var(--primary-purple);
+    color: var(--glow-purple);
+}
+
+.folder-nav-item.active {
+    background: var(--primary-purple);
+    color: white;
+    border-color: var(--primary-purple);
+}
+
+/* Item de carpeta en la lista */
+.folder-item {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.folder-item:hover {
+    transform: scale(1.05);
+    border-color: var(--primary-purple);
+    background: #252525;
+}
+
+.folder-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.folder-name {
+    color: var(--glow-purple);
+    font-weight: bold;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-purple);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--glow-purple);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    .upload-section {
+        padding: 20px;
+    }
+    
+    .folder-options {
+        flex-direction: column;
+    }
+    
+    .folder-btn {
+        width: 100%;
+    }
+    
+    ul#video-list {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 15px;
+    }
+    
+    .video-title {
+        font-size: 0.85rem;
+    }
+}
+
+/* Navegación */
+.nav-bar {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 0.5rem;
+    margin-bottom: 2rem;
+    display: flex;
+    gap: 0.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.nav-btn {
+    background: transparent;
+    color: var(--text-color);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    flex: 1;
+}
+
+.nav-btn:hover {
+    background: rgba(157, 78, 221, 0.2);
+    color: var(--glow-purple);
+}
+
+.nav-btn.active {
+    background: var(--primary-purple);
+    color: white;
+    box-shadow: 0 0 15px rgba(157, 78, 221, 0.3);
+}

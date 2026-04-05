@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Server - Subidor</title>
+    <link rel="stylesheet" href="style2.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Botones de navegación -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; justify-content: center;">
+            <button onclick="window.location.href='/'" style="background: #1a1a1a; color: #e0e0e0; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">🎬 Reproductor</button>
+            <button onclick="window.location.href='/upload.html'" style="background: #9d4edd; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">📤 Subir Videos</button>
+        </div>
+
+        <h1>📹 SUBIDOR DE VIDEOS</h1>
+        
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">🎬</div>
+                <h3>Arrastra o haz clic para seleccionar un video</h3>
+                <p>Formatos: MP4, MKV, AVI, MOV, WEBM | Máx: 50GB</p>
+                <input type="file" id="videoInput" accept=".mp4,.mkv,.avi,.mov,.webm" style="display: none;">
+            </div>
+
+            <div class="file-info" id="fileInfo">
+                <div class="file-name"><strong>📹 Archivo:</strong> <span id="fileName"></span></div>
+                <div class="file-size"><strong>💾 Tamaño:</strong> <span id="fileSize"></span></div>
+            </div>
+
+            <div class="folder-selection">
+                <label>📁 Carpeta de destino:</label>
+                <div class="folder-options">
+                    <button type="button" class="folder-btn active" data-folder="raiz">📂 Raíz</button>
+                    <button type="button" class="folder-btn" data-folder="existente">📁 Carpeta existente</button>
+                    <button type="button" class="folder-btn" data-folder="nueva">✨ Crear nueva carpeta</button>
+                </div>
+
+                <div class="existing-folders" id="existingFolders" style="display: none;">
+                    <select id="folderSelect" class="folder-select">
+                        <option value="">Selecciona una carpeta...</option>
+                    </select>
+                </div>
+
+                <div class="new-folder-input" id="newFolderInput" style="display: none;">
+                    <input type="text" id="newFolderName" placeholder="Nombre de la nueva carpeta" maxlength="50" class="folder-input">
+                </div>
+            </div>
+
+            <button id="uploadBtn" class="upload-btn" disabled>🚀 SUBIR VIDEO</button>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill">0%</div>
+                </div>
+                <div class="progress-status" id="progressStatus">Preparando...</div>
+            </div>
+
+            <div id="message" class="message"></div>
+        </div>
+    </div>
+
+    <script src="main2.js"></script>
+</body>
+</html>

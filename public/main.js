@@ -12,6 +12,49 @@ const normalize = (name) => name.replace(/\s+/g, '_');
 // --- Estado de navegación ---
 let currentPath = '';  // ruta actual (ej: '', 'accion', 'accion/terror')
 
+// --- Función para solicitar pantalla completa ---
+function requestFullscreen(element) {
+    if (element.requestFullscreen) {
+        element.requestFullscreen();
+    } else if (element.webkitRequestFullscreen) { // Safari
+        element.webkitRequestFullscreen();
+    } else if (element.msRequestFullscreen) { // IE/Edge
+        element.msRequestFullscreen();
+    }
+}
+
+// --- Función para salir de pantalla completa ---
+function exitFullscreen() {
+    if (document.exitFullscreen) {
+        document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+    }
+}
+
+// --- Detectar cuando se sale de pantalla completa ---
+function setupFullscreenListener() {
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+}
+
+function handleFullscreenChange() {
+    const isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+    );
+    
+    // Si NO estamos en pantalla completa Y el reproductor está visible
+    if (!isFullscreen && playerContainer.style.display !== 'none') {
+        console.log('Salió de pantalla completa, volviendo a la lista');
+        exitPlayer();
+    }
+}
+
 // --- 1. Cargar contenido según ruta ---
 async function loadVideos(path = '') {
     try {
@@ -119,7 +162,7 @@ function goUp() {
     loadVideos(currentPath);
 }
 
-// --- 5. Reproducir video ---
+// --- 5. Reproducir video con pantalla completa automática ---
 function startPlayer(videoName) {
     listContainer.style.display = 'none';
     playerContainer.style.display = 'block';
@@ -132,9 +175,15 @@ function startPlayer(videoName) {
     
     backBtn.focus();
     
+    // 🎯 REPRODUCIR Y ACTIVAR PANTALLA COMPLETA AUTOMÁTICAMENTE
     videoPlayer.play().catch(error => {
         console.log("Reproducción automática bloqueada");
     });
+    
+    // Esperar un momento para que el video cargue y luego pantalla completa
+    setTimeout(() => {
+        requestFullscreen(videoPlayer);
+    }, 500);
 }
 
 // --- 6. Salir del reproductor ---
@@ -151,11 +200,15 @@ function exitPlayer() {
 // --- Eventos ---
 backBtn.onclick = () => exitPlayer();
 
+// Manejar tecla ESC: sale del reproductor Y de pantalla completa
 window.onkeydown = (e) => {
     if (e.key === 'Escape' && playerContainer.style.display !== 'none') {
         exitPlayer();
+        // También salir de pantalla completa por si acaso
+        exitFullscreen();
     }
 };
 
-// --- Iniciar ---
+// --- Iniciar listeners ---
+setupFullscreenListener();
 loadVideos();

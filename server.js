@@ -1,13 +1,27 @@
 import express from "express";
 import path from "path";
 import os from "os";
+import fileUpload from "express-fileupload"; // ✅ Importante
 import videoRouter from "./src/router/videoRouter.js";
 import cors from "cors";
 import { Bonjour } from "bonjour-service";
 
 const PORT = 3000;
 const app = express();
+
+// ✅ Middlewares básicos (FALTABAN ESTOS)
 app.use(cors());
+app.use(express.json()); // Para parsear JSON
+app.use(express.urlencoded({ extended: true })); // Para parsear formularios
+
+// ✅ Middleware para subida de archivos (EL MÁS IMPORTANTE)
+app.use(fileUpload({
+    limits: { fileSize: 50 * 1024 * 1024 * 1024 }, // 50GB máximo
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+    debug: false // Cambia a true si quieres ver logs detallados
+}));
+
 const bonjour = new Bonjour();
 
 bonjour.publish({
@@ -55,17 +69,15 @@ function getLocalIP() {
   return fallback || "localhost";
 }
 
-app.use(
-  "/",
-  express.static("public")
-);
-app.use(videoRouter)
+// ✅ Archivos estáticos
+app.use("/", express.static("public"));
 
-
+// ✅ Rutas (DEBE IR DESPUÉS de los middlewares)
+app.use(videoRouter);
 
 app.listen(PORT, "0.0.0.0", () => {
   const ip = getLocalIP();
- console.log("------ SERVIDOR fastvideo ------");
+  console.log("------ SERVIDOR fastvideo ------");
   console.log(`Local:      http://localhost:${PORT}`);
   console.log(`Red:        http://${ip}:${PORT}`);
   console.log(`Nombre:     http://fastvideo.local:${PORT} 🌐`);
