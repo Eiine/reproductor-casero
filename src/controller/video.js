@@ -79,7 +79,6 @@ export const playVideo = (req, res) => {
     const videoName = req.params.videoName;
     const videoPath = path.join(videoFolder, videoName);
 
-    // 1. Verificar si el archivo existe
     if (!fs.existsSync(videoPath)) {
         return res.status(404).send('Video no encontrado');
     }
@@ -88,24 +87,34 @@ export const playVideo = (req, res) => {
     const fileSize = stat.size;
     const range = req.headers.range;
 
-    // 2. Analizar el audio del video
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
         if (err) {
             console.error('Error analizando video:', err);
             return res.status(500).send('Error al procesar video');
         }
 
-        // Buscar la pista de audio
         const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
         const audioCodec = audioStream ? audioStream.codec_name : null;
-        
-        // Formatos problemáticos para TV
         const problemCodecs = ['ac3', 'eac3', 'dts', 'dts-hd', 'truehd'];
         const needsTranscoding = problemCodecs.includes(audioCodec);
 
-        console.log(`🎵 Audio detectado: ${audioCodec} - ${needsTranscoding ? '🔄 Necesita conversión' : '✅ Directo'}`);
+        console.log(`🎵 Audio: ${audioCodec} - ${needsTranscoding ? '🔄 Transcodificando' : '✅ Directo'}`);
 
-        // 3. Manejar el streaming según si necesita conversión o no
+        // --- MANEJO DE CIERRE DE RECURSOS ---
+        let ffmpegProcess = null;
+        let fileStream = null;
+
+        req.on('close', () => {
+            if (ffmpegProcess) {
+                console.log('🛑 Matando proceso FFmpeg por desconexión...');
+                ffmpegProcess.kill('SIGKILL');
+            }
+            if (fileStream) {
+                console.log('📂 Cerrando stream de archivo...');
+                fileStream.destroy();
+            }
+        });
+
         if (range) {
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
@@ -120,38 +129,39 @@ export const playVideo = (req, res) => {
             });
 
             if (needsTranscoding) {
-                // 🔄 TRANScodificación: Convierte audio en tiempo real
-                console.log('🎵 Transcodificando audio a AAC...');
-                ffmpeg(videoPath)
+                ffmpegProcess = ffmpeg(videoPath)
+                    .setStartTime(start / (fileSize / metadata.format.duration)) // Estimación de tiempo para el range
                     .outputOptions([
-                        '-hwaccel qsv',
-                        '-c:v copy',      // Copia el video SIN tocar (rápido)
-                        '-c:a aac',       // Convierte audio a AAC (compatible con TV)
-                        '-ac 2',          // Convierte 5.1 a estéreo (2 canales)
-                        '-b:a 192k',      // Calidad de audio buena
-                        '-movflags frag_keyframe+empty_moov' // Streaming fluido
+                        // '-hwaccel qsv', // COMENTAR SI NO ES INTEL (PC Desarrollo)
+                        '-c:v copy',
+                        '-c:a aac',
+                        '-ac 2',
+                        '-b:a 192k',
+                        '-movflags frag_keyframe+empty_moov+faststart'
                     ])
                     .on('error', (err) => {
-                        console.error('Error transcodificando:', err);
+                        if (err.message && !err.message.includes('SIGKILL')) {
+                            console.error('FFmpeg Error:', err.message);
+                        }
                         res.end();
-                    })
-                    .pipe(res, { end: true });
+                    });
+                
+                ffmpegProcess.pipe(res, { end: true });
             } else {
-                // ✅ DIRECTO: El audio ya es compatible
-                console.log('✅ Audio compatible, sirviendo directo');
-                const file = fs.createReadStream(videoPath, { start, end });
-                file.pipe(res);
+                fileStream = fs.createReadStream(videoPath, { start, end });
+                fileStream.pipe(res);
             }
         } else {
-            // Sin rango (carga completa)
-            res.writeHead(200, { 'Content-Type': 'video/mp4' });
+            // Carga completa (sin range)
+            res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': fileSize });
             
             if (needsTranscoding) {
-                ffmpeg(videoPath)
-                    .outputOptions(['-c:v copy', '-c:a aac', '-ac 2'])
+                ffmpegProcess = ffmpeg(videoPath)
+                    .outputOptions(['-c:v copy', '-c:a aac', '-ac 2', '-movflags +faststart'])
                     .pipe(res, { end: true });
             } else {
-                fs.createReadStream(videoPath).pipe(res);
+                fileStream = fs.createReadStream(videoPath);
+                fileStream.pipe(res);
             }
         }
     });
