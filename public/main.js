@@ -109,13 +109,12 @@ function renderContent(folders, videos) {
         
         // Crear imagen de miniatura con nombre normalizado
         const img = document.createElement('img');
-        const normalizedName = normalize(video.displayName);
-        img.src = `/thumbnails/${normalizedName}.jpg`;
+        img.src = `/thumbnails/${video.displayName}.jpg`;
         img.className = 'thumb-img';
         
         img.onerror = () => { 
             img.style.display = 'none';
-            console.log(`Miniatura no encontrada: /thumbnails/${normalizedName}.jpg`);
+            console.log(`Miniatura no encontrada: /thumbnails/${video.displayName}.jpg`);
         };
         
         // Título del video (mostrar nombre original)

@@ -5,10 +5,11 @@ import fileUpload from "express-fileupload"; // ✅ Importante
 import videoRouter from "./src/router/videoRouter.js";
 import cors from "cors";
 import { Bonjour } from "bonjour-service";
+import { startOptimizationCron } from './src/services/optimizer.js';
 
 const PORT = 3000;
 const app = express();
-
+startOptimizationCron();
 // ✅ Middlewares básicos (FALTABAN ESTOS)
 app.use(cors());
 app.use(express.json()); // Para parsear JSON

@@ -6,16 +6,17 @@ import { videoFolder, thumbFolder } from '../utils/alias.js';
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-
-export const generateThumbnail = (videoName, subPath = '', time = 10) => {
+export const generateThumbnail = (videoName, subPath = '', time = 20) => {
     return new Promise((resolve, reject) => {
-        // 1. Usar path.join de forma limpia
         const videoPath = path.join(videoFolder, subPath, videoName);
         
-        // 2. IMPORTANTE: Si usas normalización, el frontend debe saberlo.
-        // Recomiendo NO normalizar aquí si mapDirectory ya te da un nombre limpio.
+        // 1. Obtener nombre base
         const baseName = path.parse(videoName).name; 
-        const thumbName = `${baseName}.jpg`;
+        
+        // 2. REGLA: Sustituir espacios por guiones bajos
+        const safeBaseName = baseName.replace(/ /g, '_'); 
+        
+        const thumbName = `${safeBaseName}.jpg`;
         const thumbPath = path.join(thumbFolder, thumbName);
 
         if (fs.existsSync(thumbPath)) return resolve(thumbName);
@@ -26,7 +27,7 @@ export const generateThumbnail = (videoName, subPath = '', time = 10) => {
             .on('error', (err) => reject(err))
             .screenshots({
                 timestamps: [time],
-                filename: thumbName,
+                filename: thumbName, // Se guardará como 'video_con_guiones.jpg'
                 folder: thumbFolder,
                 size: '320x180'
             });

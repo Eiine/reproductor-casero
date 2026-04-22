@@ -16,52 +16,43 @@ ffmpeg.setFfprobePath(ffprobeInstaller.path);
 // En tu controller
 export const getVideos = async (req, res) => {
   try {
-    // Obtener ruta del query string, si existe
     const subPath = req.query.path || '';
-    
-    // Construir ruta completa (sanitizada)
     let targetPath = videoFolder;
+
     if (subPath) {
-      // Normalizar y prevenir path traversal
       const cleanPath = subPath.replace(/\.\./g, '').replace(/\/+/g, '/');
       targetPath = path.join(videoFolder, cleanPath);
       
-      
-      // Validar que no se salga de videoFolder
       if (!targetPath.startsWith(videoFolder)) {
         return res.status(403).json({ error: "Acceso denegado" });
       }
     }
     
-    // Verificar que la carpeta existe
     if (!fs.existsSync(targetPath)) {
       return res.status(404).json({ error: "Carpeta no encontrada" });
     }
     
     const data = mapDirectory(targetPath);
     
-    // Limpiar miniaturas huérfanas (solo en raíz para no complicar)
-    //if (!subPath) {
-      //cleanOrphanThumbnails(data.baseNames);
-    //}
-    
-    // Mapear carpetas
     const folderData = data.folders.map(folder => ({
       name: folder.name,
       type: 'folder',
       displayName: folder.name
     }));
-    
-    // Mapear videos
+
+    // Mapear videos con la misma normalización
     const videoData = data.videos.map(file => {
-       enqueueThumbnail(file.name, subPath);  // ← pasar subPath
-        return {
-    ...file,  // ← expande las propiedades de file (name, displayName)
-    thumbnail: `/thumbnails/${file.displayName}.jpg`,
-    type: 'video'
-  };
-    });
+    enqueueThumbnail(file.name, subPath);  
     
+    const baseName = path.parse(file.name).name;
+    
+    return {
+        ...file,
+        
+        thumbnail: `/thumbnails/${baseName}`, 
+        type: 'video'
+    };
+});
     res.json({
       folders: folderData,
       videos: videoData,
@@ -79,6 +70,7 @@ export const playVideo = (req, res) => {
     const videoName = req.params.videoName;
     const videoPath = path.join(videoFolder, videoName);
 
+    // 1. Verificación básica de existencia
     if (!fs.existsSync(videoPath)) {
         return res.status(404).send('Video no encontrado');
     }
@@ -87,79 +79,125 @@ export const playVideo = (req, res) => {
     const fileSize = stat.size;
     const range = req.headers.range;
 
+    // 2. Análisis del archivo para decidir estrategia
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
         if (err) {
             console.error('Error analizando video:', err);
             return res.status(500).send('Error al procesar video');
         }
 
+        const videoStream = metadata.streams.find(s => s.codec_type === 'video');
         const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
-        const audioCodec = audioStream ? audioStream.codec_name : null;
-        const problemCodecs = ['ac3', 'eac3', 'dts', 'dts-hd', 'truehd'];
-        const needsTranscoding = problemCodecs.includes(audioCodec);
 
-        console.log(`🎵 Audio: ${audioCodec} - ${needsTranscoding ? '🔄 Transcodificando' : '✅ Directo'}`);
+        const videoCodec = videoStream ? videoStream.codec_name : '';
+        const audioCodec = audioStream ? audioStream.codec_name : '';
+        const duration = metadata.format.duration;
 
-        // --- MANEJO DE CIERRE DE RECURSOS ---
+        // --- CONFIGURACIÓN DE COMPATIBILIDAD ---
+        const problematicVideo = ['hevc', 'h265', 'vp9', 'av1', 'wmv', 'divx', 'xvid', 'mjpeg'];
+        const problematicAudio = ['ac3', 'eac3', 'dts', 'dts-hd', 'truehd', 'opus', 'flac', 'vorbis'];
+
+        // Si no es H264 estándar o está en la lista negra, recodificamos video
+        const needsVideoTranscode = videoCodec !== 'h264' || problematicVideo.includes(videoCodec);
+        // Si el audio es conflictivo, recodificamos audio
+        const needsAudioTranscode = problematicAudio.includes(audioCodec);
+        
+        const needsTranscoding = needsVideoTranscode || needsAudioTranscode;
+
+        console.log(`[Streaming] ${videoName}`);
+        console.log(`🎬 Video: ${videoCodec} -> ${needsVideoTranscode ? '🔄 Recodificando' : '✅ Directo'}`);
+        console.log(`🎵 Audio: ${audioCodec} -> ${needsAudioTranscode ? '🔄 Recodificando' : '✅ Directo'}`);
+
+        // --- GESTIÓN DE RECURSOS ---
         let ffmpegProcess = null;
         let fileStream = null;
 
         req.on('close', () => {
             if (ffmpegProcess) {
-                console.log('🛑 Matando proceso FFmpeg por desconexión...');
+                console.log('🛑 Matando proceso FFmpeg...');
                 ffmpegProcess.kill('SIGKILL');
             }
             if (fileStream) {
-                console.log('📂 Cerrando stream de archivo...');
                 fileStream.destroy();
             }
         });
 
+        // --- OPCIONES DE TRANSCODIFICACIÓN OPTIMIZADAS ---
+        const getTranscodeOptions = () => {
+            const options = [
+                '-movflags frag_keyframe+empty_moov+faststart',
+                '-pix_fmt yuv420p', // Máxima compatibilidad de color
+                '-sn'               // Deshabilitar subtítulos embebidos (evita errores de stream)
+            ];
+
+            if (needsVideoTranscode) {
+                options.push('-c:v libx264');
+                options.push('-preset superfast'); // Carga mínima de CPU
+                options.push('-crf 23');           // Calidad estándar
+                options.push('-profile:v main');    // Perfil compatible con TVs
+                options.push('-level 4.0');
+                // options.push('-vf scale=-2:720'); // DESCOMENTA ESTA LÍNEA SI EL SERVER SE TRABA CON 1080p
+            } else {
+                options.push('-c:v copy');
+            }
+
+            if (needsAudioTranscode) {
+                options.push('-c:a aac');
+                options.push('-ac 2');              // Forzar estéreo para evitar problemas de canales
+                options.push('-b:a 128k');
+            } else {
+                options.push('-c:a copy');
+            }
+
+            return options;
+        };
+
+        // 3. RESPUESTA AL NAVEGADOR (STREAMING)
         if (range) {
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
             const chunksize = (end - start) + 1;
 
-            res.writeHead(206, {
-                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                'Accept-Ranges': 'bytes',
-                'Content-Length': chunksize,
-                'Content-Type': 'video/mp4',
-            });
-
             if (needsTranscoding) {
-                ffmpegProcess = ffmpeg(videoPath)
-                    .setStartTime(start / (fileSize / metadata.format.duration)) // Estimación de tiempo para el range
-                    .outputOptions([
-                        // '-hwaccel qsv', // COMENTAR SI NO ES INTEL (PC Desarrollo)
-                        '-c:v copy',
-                        '-c:a aac',
-                        '-ac 2',
-                        '-b:a 192k',
-                        '-movflags frag_keyframe+empty_moov+faststart'
-                    ])
-                    .on('error', (err) => {
-                        if (err.message && !err.message.includes('SIGKILL')) {
-                            console.error('FFmpeg Error:', err.message);
-                        }
-                        res.end();
-                    });
+                // Estimamos el punto de inicio en segundos para FFmpeg
+                const startTime = (start / fileSize) * duration;
                 
-                ffmpegProcess.pipe(res, { end: true });
+                res.writeHead(206, {
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Type': 'video/mp4'
+                });
+
+                ffmpegProcess = ffmpeg(videoPath)
+                    .setStartTime(startTime)
+                    .outputOptions(getTranscodeOptions())
+                    .on('error', (err) => {
+                        if (!err.message.includes('SIGKILL')) console.error('FFmpeg error:', err.message);
+                        res.end();
+                    })
+                    .pipe(res, { end: true });
             } else {
+                res.writeHead(206, {
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': chunksize,
+                    'Content-Type': 'video/mp4'
+                });
                 fileStream = fs.createReadStream(videoPath, { start, end });
                 fileStream.pipe(res);
             }
         } else {
-            // Carga completa (sin range)
-            res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': fileSize });
+            // Carga completa o navegadores sin soporte de range inicial
+            res.writeHead(200, { 'Content-Type': 'video/mp4' });
             
             if (needsTranscoding) {
                 ffmpegProcess = ffmpeg(videoPath)
-                    .outputOptions(['-c:v copy', '-c:a aac', '-ac 2', '-movflags +faststart'])
+                    .outputOptions(getTranscodeOptions())
+                    .on('error', (err) => res.end())
                     .pipe(res, { end: true });
             } else {
+                res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });
                 fileStream = fs.createReadStream(videoPath);
                 fileStream.pipe(res);
             }
