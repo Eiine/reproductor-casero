@@ -17,6 +17,7 @@
         <h1>📹 SUBIDOR DE VIDEOS</h1>
         
         <div class="upload-section">
+            <!-- SECCIÓN PARA SUBIR VIDEO -->
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">🎬</div>
                 <h3>Arrastra o haz clic para seleccionar un video</h3>
@@ -24,7 +25,7 @@
                 <input type="file" id="videoInput" accept=".mp4,.mkv,.avi,.mov,.webm" style="display: none;">
             </div>
 
-            <div class="file-info" id="fileInfo">
+            <div class="file-info" id="fileInfo" style="display: none;">
                 <div class="file-name"><strong>📹 Archivo:</strong> <span id="fileName"></span></div>
                 <div class="file-size"><strong>💾 Tamaño:</strong> <span id="fileSize"></span></div>
             </div>
@@ -50,7 +51,24 @@
 
             <button id="uploadBtn" class="upload-btn" disabled>🚀 SUBIR VIDEO</button>
 
-            <div class="progress-container" id="progressContainer">
+            <!-- NUEVA SECCIÓN PARA DESCARGA DESDE TXT -->
+            <div class="download-section" style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #333;">
+                <h3>📥 DESCARGA MASIVA DESDE TEXTO</h3>
+                <p style="color: #aaa; font-size: 14px;">Sube un archivo .txt con links de YouTube, Google Drive o URLs directas (uno por línea)</p>
+                
+                <div class="upload-area" id="textUploadArea" style="background: #1a1a2e; border: 2px dashed #9d4edd;">
+                    <div class="upload-icon">📄</div>
+                    <h3>Arrastra o haz clic para seleccionar archivo de texto</h3>
+                    <p>Formatos: .txt, .md, .csv | Con links de descarga</p>
+                    <input type="file" id="textFileInput" accept=".txt,.md,.csv" style="display: none;">
+                </div>
+                
+                <div class="file-info" id="textFileInfo" style="display: none;"></div>
+                
+                <button id="downloadFromTextBtn" class="upload-btn" style="background: #e67e22; margin-top: 15px;">📥 DESCARGAR VIDEOS DESDE TEXTO</button>
+            </div>
+
+            <div class="progress-container" id="progressContainer" style="display: none;">
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill">0%</div>
                 </div>

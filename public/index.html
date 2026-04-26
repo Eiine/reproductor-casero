@@ -8,47 +8,35 @@
 </head>
 <body>
     <main id="app">
-        <!-- Barra de navegación mejorada -->
+
+        <!-- NAV -->
         <div class="nav-bar">
             <button id="nav-player" class="nav-btn active">🎬 Reproductor</button>
             <button id="nav-upload" class="nav-btn">📤 Subir Videos</button>
         </div>
 
+        <!-- LISTA -->
         <section id="list-container">
             <h1>Mis Videos</h1>
-            <div id="current-dir" style="margin-bottom: 1rem; color: #888; font-size: 0.9rem;"></div>
+            <div id="current-dir"></div>
             <ul id="video-list">
                 <p>Cargando biblioteca...</p>
             </ul>
         </section>
         
-        <section id="player-container" class="hidden">
-            <button id="back-btn">← Volver a la lista</button>
-            <h2 id="now-playing">Reproduciendo...</h2>
+        <!-- PLAYER -->
+        <section id="player-container" style="display:none;">
+            <button id="back-btn">← Volver</button>
+            <h2 id="now-playing"></h2>
+
             <video id="main-player" controls>
                 <source src="" type="video/mp4">
                 Tu navegador no soporta video.
             </video>
         </section>
+
     </main>
 
     <script src="main.js"></script>
-    <script>
-        // Navegación
-        const navPlayer = document.getElementById('nav-player');
-        const navUpload = document.getElementById('nav-upload');
-        
-        if (navUpload) {
-            navUpload.addEventListener('click', () => {
-                window.location.href = '/upload.html';
-            });
-        }
-        
-        if (navPlayer) {
-            navPlayer.addEventListener('click', () => {
-                window.location.href = '/';
-            });
-        }
-    </script>
 </body>
 </html>

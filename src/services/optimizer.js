@@ -8,17 +8,23 @@ import { videoFolder } from '../utils/alias.js';
 
 const DB_PATH = path.join(process.cwd(), 'processed_videos.json');
 
+// 🔒 Límite por ejecución (por día)
+const MAX_PER_RUN = 2;
+
 // --- PERSISTENCIA ---
 async function getProcessedVideos() {
     try {
         const data = await fs.readFile(DB_PATH, 'utf-8');
         return JSON.parse(data);
-    } catch { return []; }
+    } catch {
+        return [];
+    }
 }
 
 async function saveProcessed(videoPath) {
     const list = await getProcessedVideos();
     const absPath = path.resolve(videoPath);
+
     if (!list.includes(absPath)) {
         list.push(absPath);
         await fs.writeFile(DB_PATH, JSON.stringify(list, null, 2));
@@ -31,8 +37,7 @@ const optimizeVideo = (videoPath) => {
         const dir = path.dirname(videoPath);
         const ext = path.extname(videoPath);
         const baseName = path.basename(videoPath, ext);
-        
-        // Temporal único para evitar colisiones
+
         const tempPath = path.join(dir, `${baseName}_opt.tmp.mp4`);
         const finalPath = path.join(dir, `${baseName}.mp4`);
 
@@ -42,26 +47,25 @@ const optimizeVideo = (videoPath) => {
             const vStream = metadata.streams.find(s => s.codec_type === 'video');
             const aStream = metadata.streams.find(s => s.codec_type === 'audio');
 
-            // Criterios de Analista para el Centrino
             const isMP4 = ext.toLowerCase() === '.mp4';
             const isH264 = vStream?.codec_name === 'h264';
             const isAAC = aStream?.codec_name === 'aac';
-            const isLevelOk = vStream?.level <= 40; 
+            const isLevelOk = vStream?.level <= 40;
             const isAudioOk = parseInt(aStream?.sample_rate) <= 44100;
 
             if (!isMP4 || !isH264 || !isAAC || !isLevelOk || !isAudioOk) {
                 console.log(`🛠️  [Optimizer] Recodificando: ${baseName}${ext}`);
-                
+
                 ffmpeg(videoPath)
                     .outputOptions([
-                        '-c:v libx264', 
-                        '-profile:v high', 
-                        '-level:v 4.0',      // Crucial para el Centrino
-                        '-crf 23', 
+                        '-c:v libx264',
+                        '-profile:v high',
+                        '-level:v 4.0',
+                        '-crf 23',
                         '-preset fast',
-                        '-c:a aac', 
-                        '-ar 44100',         
-                        '-b:a 125k', 
+                        '-c:a aac',
+                        '-ar 44100',
+                        '-b:a 125k',
                         '-ac 2',
                         '-movflags +faststart'
                     ])
@@ -70,80 +74,103 @@ const optimizeVideo = (videoPath) => {
                             const pathOrig = path.resolve(videoPath);
                             const pathDest = path.resolve(finalPath);
 
-                            // --- MANIOBRA DE REEMPLAZO SEGURO ---
-                            // Borramos el original (sea MKV o el MP4 pesado)
                             console.log(`   🗑️  Eliminando versión antigua...`);
-                            await fs.unlink(pathOrig); 
+                            await fs.unlink(pathOrig);
 
-                            // Renombramos el temporal al nombre final .mp4
                             console.log(`   ♻️  Estableciendo versión optimizada...`);
                             await fs.rename(tempPath, pathDest);
-                            
+
                             await saveProcessed(pathDest);
-                            console.log(`✅ [Optimizer] Finalizado con éxito: ${baseName}.mp4`);
-                            resolve();
-                        } catch (e) { 
-                            console.error("❌ [Optimizer] Error en reemplazo de archivos:", e);
-                            reject(e); 
+
+                            console.log(`✅ [Optimizer] Finalizado: ${baseName}.mp4`);
+                            resolve(true); // 🔥 indica que se procesó realmente
+                        } catch (e) {
+                            console.error("❌ Error en reemplazo:", e);
+                            reject(e);
                         }
                     })
-                    .on('error', (e) => {
-                        console.error(`❌ [Optimizer] Error de FFmpeg en ${baseName}:`, e.message);
+                    .on('error', async (e) => {
+                        console.error(`❌ Error FFmpeg en ${baseName}:`, e.message);
+
+                        // 🧹 limpiar temporal si falla
+                        try {
+                            if (existsSync(tempPath)) {
+                                await fs.unlink(tempPath);
+                            }
+                        } catch {}
+
                         reject(e);
                     })
                     .save(tempPath);
             } else {
-                // Si ya es apto, lo registramos para no volver a analizarlo
-                saveProcessed(videoPath).then(resolve);
+                // Ya está optimizado
+                saveProcessed(videoPath).then(() => resolve(false));
             }
         });
     });
 };
 
-// --- NAVEGACIÓN RECURSIVA ---
-async function ejecutarMantenimiento(currentPath, processedList) {
+// --- NAVEGACIÓN RECURSIVA CON LÍMITE ---
+async function ejecutarMantenimiento(currentPath, processedList, state) {
+    if (state.processedToday >= MAX_PER_RUN) return;
+
     const data = mapDirectory(currentPath);
 
-    // Procesar videos de la carpeta actual uno por uno (Sequential)
+    // 🎬 Videos
     for (const video of data.videos) {
+        if (state.processedToday >= MAX_PER_RUN) return;
+
         const fullPath = path.resolve(path.join(currentPath, video.name));
-        
-        if (processedList.includes(fullPath)) {
-            continue; // Ya procesado, saltar.
-        }
-        
+
+        if (processedList.includes(fullPath)) continue;
+
         try {
-            await optimizeVideo(fullPath);
-        } catch (err) {
-            console.error(`❌ [Optimizer] Falló el procesamiento de ${video.name}`);
+            const wasProcessed = await optimizeVideo(fullPath);
+
+            if (wasProcessed) {
+                state.processedToday++;
+                console.log(`📊 Procesados hoy: ${state.processedToday}/${MAX_PER_RUN}`);
+            }
+
+        } catch {
+            console.error(`❌ Falló: ${video.name}`);
         }
     }
 
-    // Entrar en subcarpetas
+    // 📁 Subcarpetas
     for (const folder of data.folders) {
+        if (state.processedToday >= MAX_PER_RUN) return;
+
         const nextPath = path.join(currentPath, folder.name);
-        await ejecutarMantenimiento(nextPath, processedList);
+        await ejecutarMantenimiento(nextPath, processedList, state);
     }
 }
 
-// --- EXPORTACIÓN DEL CRON ---
+// --- CRON ---
 export const startOptimizationCron = () => {
-    console.log("⏰ Cron de optimización nocturna programado (03:00 AM)");
-    
+    console.log("⏰ Cron activo (máx 2 videos por día a las 03:00 AM)");
+
     cron.schedule('0 3 * * *', async () => {
-        console.log('🌙 [Cron] Iniciando mantenimiento de biblioteca...');
-        
+        console.log('🌙 [Cron] Iniciando mantenimiento...');
+
         if (!existsSync(videoFolder)) {
-            console.error("❌ [Cron] Error: La carpeta de videos no existe.");
+            console.error("❌ Carpeta no existe.");
             return;
         }
 
         try {
             const processedList = await getProcessedVideos();
-            await ejecutarMantenimiento(videoFolder, processedList);
-            console.log('✅ [Cron] Mantenimiento nocturno finalizado.');
+
+            const state = {
+                processedToday: 0
+            };
+
+            await ejecutarMantenimiento(videoFolder, processedList, state);
+
+            console.log(`🏁 Finalizado. Total procesados hoy: ${state.processedToday}`);
+
         } catch (err) {
-            console.error("❌ [Cron] Error crítico durante el mantenimiento:", err);
+            console.error("❌ Error crítico:", err);
         }
     });
 };
