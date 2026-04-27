@@ -161,7 +161,10 @@ function checkUploadReady() {
 }
 
 async function uploadVideo() {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+        showMessage('Selecciona un video primero', 'error');
+        return;
+    }
     
     let finalFolder = targetFolder;
     if (targetFolder === 'nueva') {
@@ -184,6 +187,11 @@ async function uploadVideo() {
     formData.append('video', selectedFile);
     formData.append('targetFolder', finalFolder);
     
+    // DEBUG: Ver qué estamos enviando
+    console.log('Enviando archivo:', selectedFile.name);
+    console.log('Carpeta destino:', finalFolder);
+    console.log('Tamaño:', selectedFile.size);
+    
     if (uploadBtn) uploadBtn.disabled = true;
     if (progressContainer) progressContainer.style.display = 'block';
     if (progressFill) {
@@ -193,52 +201,32 @@ async function uploadVideo() {
     if (progressStatus) progressStatus.textContent = 'Subiendo...';
     
     try {
-        const xhr = new XMLHttpRequest();
-        
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable && progressFill && progressStatus) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                progressFill.style.width = percentComplete + '%';
-                progressFill.textContent = Math.round(percentComplete) + '%';
-                progressStatus.textContent = `Subiendo... ${Math.round(percentComplete)}%`;
-            }
+        // Usar fetch en lugar de XMLHttpRequest para mejor compatibilidad
+        const response = await fetch(UPLOAD_ENDPOINT, {
+            method: 'POST',
+            body: formData
+            // NO poner headers Content-Type - fetch lo setea automáticamente con el boundary
         });
         
-        xhr.onload = () => {
-            if (xhr.status === 200) {
-                const response = JSON.parse(xhr.responseText);
-                showMessage(`✅ ${response.message}`, 'success');
-                resetForm();
-                loadFolders(); // Recargar solo las carpetas
-            } else {
-                try {
-                    const response = JSON.parse(xhr.responseText);
-                    showMessage(`❌ Error: ${response.error}`, 'error');
-                } catch {
-                    showMessage(`❌ Error ${xhr.status}: No se pudo subir el video`, 'error');
-                }
-            }
-            if (uploadBtn) uploadBtn.disabled = false;
-            setTimeout(() => {
-                if (progressContainer) progressContainer.style.display = 'none';
-                if (progressFill) progressFill.style.width = '0%';
-            }, 2000);
-        };
+        const result = await response.json();
         
-        xhr.onerror = () => {
-            showMessage('❌ Error de conexión con el servidor', 'error');
-            if (uploadBtn) uploadBtn.disabled = false;
-            if (progressContainer) progressContainer.style.display = 'none';
-        };
-        
-        xhr.open('POST', UPLOAD_ENDPOINT, true);
-        xhr.send(formData);
+        if (response.ok) {
+            showMessage(`✅ ${result.message}`, 'success');
+            resetForm();
+            loadFolders(); // Recargar carpetas
+        } else {
+            showMessage(`❌ Error: ${result.error}`, 'error');
+        }
         
     } catch (error) {
         console.error('Error en subida:', error);
-        showMessage('❌ Error al subir el video', 'error');
+        showMessage(`❌ Error de conexión: ${error.message}`, 'error');
+    } finally {
         if (uploadBtn) uploadBtn.disabled = false;
-        if (progressContainer) progressContainer.style.display = 'none';
+        setTimeout(() => {
+            if (progressContainer) progressContainer.style.display = 'none';
+            if (progressFill) progressFill.style.width = '0%';
+        }, 2000);
     }
 }
 
