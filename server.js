@@ -9,6 +9,8 @@ import { startOptimizationCron } from './src/services/optimizer.js';
 
 const PORT = 3000;
 const app = express();
+app.use(express.json({ limit: '50gb' }));
+app.use(express.urlencoded({ extended: true, limit: '50gb' }));
 startOptimizationCron();
 // ✅ Middlewares básicos (FALTABAN ESTOS)
 app.use(cors());
