@@ -38,5 +38,24 @@
     </main>
 
     <script src="main.js"></script>
+
+    <!-- 🔥 NAVEGACIÓN AGREGADA -->
+    <script>
+        const navUpload = document.getElementById('nav-upload');
+        const navPlayer = document.getElementById('nav-player');
+
+        if (navUpload) {
+            navUpload.addEventListener('click', () => {
+                window.location.href = 'upload.html';
+            });
+        }
+
+        if (navPlayer) {
+            navPlayer.addEventListener('click', () => {
+                window.location.href = 'index.html';
+            });
+        }
+    </script>
+
 </body>
 </html>
