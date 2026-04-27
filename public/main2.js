@@ -161,10 +161,7 @@ function checkUploadReady() {
 }
 
 async function uploadVideo() {
-    if (!selectedFile) {
-        showMessage('Selecciona un video primero', 'error');
-        return;
-    }
+    if (!selectedFile) return;
     
     let finalFolder = targetFolder;
     if (targetFolder === 'nueva') {
@@ -187,11 +184,7 @@ async function uploadVideo() {
     formData.append('video', selectedFile);
     formData.append('targetFolder', finalFolder);
     
-    // DEBUG: Ver qué estamos enviando
-    console.log('Enviando archivo:', selectedFile.name);
-    console.log('Carpeta destino:', finalFolder);
-    console.log('Tamaño:', selectedFile.size);
-    
+    // Verificar que los elementos existen ANTES de usarlos
     if (uploadBtn) uploadBtn.disabled = true;
     if (progressContainer) progressContainer.style.display = 'block';
     if (progressFill) {
@@ -200,34 +193,54 @@ async function uploadVideo() {
     }
     if (progressStatus) progressStatus.textContent = 'Subiendo...';
     
-    try {
-        // Usar fetch en lugar de XMLHttpRequest para mejor compatibilidad
-        const response = await fetch(UPLOAD_ENDPOINT, {
-            method: 'POST',
-            body: formData
-            // NO poner headers Content-Type - fetch lo setea automáticamente con el boundary
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            showMessage(`✅ ${result.message}`, 'success');
-            resetForm();
-            loadFolders(); // Recargar carpetas
-        } else {
-            showMessage(`❌ Error: ${result.error}`, 'error');
+    const xhr = new XMLHttpRequest();
+    
+    // ✅ ESTO ES LO QUE MUESTRA LA BARRA DE PROGRESO
+    xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && progressFill && progressStatus) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            const percentRounded = Math.round(percentComplete);
+            progressFill.style.width = percentComplete + '%';
+            progressFill.textContent = percentRounded + '%';
+            progressStatus.textContent = `Subiendo video... ${percentRounded}% (${formatFileSize(e.loaded)} de ${formatFileSize(e.total)})`;
         }
-        
-    } catch (error) {
-        console.error('Error en subida:', error);
-        showMessage(`❌ Error de conexión: ${error.message}`, 'error');
-    } finally {
+    });
+    
+    xhr.onload = () => {
+        if (xhr.status === 200) {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                showMessage(`✅ ${response.message || 'Video subido exitosamente'}`, 'success');
+                resetForm();
+                if (typeof loadFolders === 'function') loadFolders(); // Recargar carpetas
+            } catch (e) {
+                showMessage('✅ Video subido exitosamente', 'success');
+                resetForm();
+            }
+        } else {
+            try {
+                const response = JSON.parse(xhr.responseText);
+                showMessage(`❌ Error: ${response.error || 'Error desconocido'}`, 'error');
+            } catch {
+                showMessage(`❌ Error ${xhr.status}: No se pudo subir el video`, 'error');
+            }
+        }
         if (uploadBtn) uploadBtn.disabled = false;
         setTimeout(() => {
             if (progressContainer) progressContainer.style.display = 'none';
             if (progressFill) progressFill.style.width = '0%';
         }, 2000);
-    }
+    };
+    
+    xhr.onerror = () => {
+        showMessage('❌ Error de conexión con el servidor', 'error');
+        if (uploadBtn) uploadBtn.disabled = false;
+        if (progressContainer) progressContainer.style.display = 'none';
+    };
+    
+    // ✅ IMPORTANTE: No establecer Content-Type manualmente
+    xhr.open('POST', UPLOAD_ENDPOINT, true);
+    xhr.send(formData);
 }
 
 function resetForm() {
