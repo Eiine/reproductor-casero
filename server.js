@@ -10,53 +10,33 @@ import { startOptimizationCron } from './src/services/optimizer.js';
 const PORT = 3000;
 const app = express();
 
-// ✅ 1. CONFIGURACIÓN DE LÍMITES - DEBE IR PRIMERO
+// ✅ 1. CONFIGURACIÓN DE LÍMITES GLOBALES
 app.use(express.json({ limit: '50gb' }));
 app.use(express.urlencoded({ extended: true, limit: '50gb' }));
 
 // ✅ 2. CORS
 app.use(cors());
 
-// ✅ 3. INICIAR CRON (después de middlewares básicos)
+// ✅ 3. INICIAR CRON
 startOptimizationCron();
 
-// ✅ 4. FILE UPLOAD - Configuración OPTIMIZADA para archivos grandes
+// ✅ 4. FILE UPLOAD - Configuración global para archivos grandes
 app.use(fileUpload({
     limits: { 
         fileSize: 50 * 1024 * 1024 * 1024, // 50GB
-        fieldSize: 50 * 1024 * 1024 * 1024  // También para campos de texto
+        fieldSize: 50 * 1024 * 1024 * 1024
     },
-    useTempFiles: true,        // Usar disco en lugar de RAM
-    tempFileDir: '/tmp/',      // Directorio temporal
-    debug: true,               // 🔥 CAMBIAR A TRUE para ver logs
-    abortOnLimit: true,        // Rechazar archivos que excedan el límite
-    parseNested: true,         // Parsear campos anidados
-    preserveExtension: true,   // Mantener extensión original
-    safeFileNames: true,       // Nombres seguros
-    uriDecodeFileNames: true   // Decodificar nombres URI
+    useTempFiles: true,
+    tempFileDir: '/tmp/',
+    debug: false,  // Cambia a true solo para debug
+    abortOnLimit: true,
+    parseNested: true,
+    preserveExtension: true,
+    safeFileNames: true,
+    uriDecodeFileNames: true
 }));
 
-// ✅ 5. MIDDLEWARE DE DIAGNÓSTICO (TEMPORAL - para debug)
-app.use('/upload-video', (req, res, next) => {
-    console.log('📊 [DIAGNÓSTICO] Solicitud a /upload-video');
-    console.log('  - Método:', req.method);
-    console.log('  - Content-Type:', req.headers['content-type']);
-    console.log('  - Content-Length:', req.headers['content-length'] ? 
-        `${(parseInt(req.headers['content-length']) / (1024*1024)).toFixed(2)} MB` : 'No especificado');
-    console.log('  - req.body existe?', !!req.body);
-    console.log('  - req.files existe?', !!req.files);
-    
-    // Verificar si es multipart
-    if (req.headers['content-type']?.includes('multipart/form-data')) {
-        console.log('  ✅ Tipo multipart detectado');
-    } else {
-        console.log('  ⚠️ No es multipart/form-data');
-    }
-    
-    next();
-});
-
-// ✅ 6. MANEJADOR DE ERRORES PARA ARCHIVOS GRANDES
+// ✅ 5. MANEJADOR DE ERRORES GLOBAL
 app.use((err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
         console.error('❌ Archivo excede el límite de 50GB');
@@ -73,13 +53,13 @@ app.use((err, req, res, next) => {
     next(err);
 });
 
-// ✅ 7. ARCHIVOS ESTÁTICOS
+// ✅ 6. ARCHIVOS ESTÁTICOS
 app.use("/", express.static("public"));
 
-// ✅ 8. RUTAS
+// ✅ 7. RUTAS (TODO LA LÓGICA ESTÁ EN EL CONTROLLER)
 app.use(videoRouter);
 
-// ✅ 9. INICIAR SERVIDOR CON TIMEOUTS AUMENTADOS
+// ✅ 8. INICIAR SERVIDOR
 const server = app.listen(PORT, "0.0.0.0", () => {
     const ip = getLocalIP();
     console.log("------ SERVIDOR fastvideo ------");
@@ -87,20 +67,19 @@ const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Red:        http://${ip}:${PORT}`);
     console.log(`Nombre:     http://fastvideo.local:${PORT} 🌐`);
     console.log("---------------------------");
-    console.log("📁 Configuración de archivos:");
+    console.log("📁 Configuración:");
     console.log(`  - Tamaño máximo: 50GB`);
-    console.log(`  - Temp directory: /tmp/`);
-    console.log(`  - Debug mode: ACTIVADO`);
+    console.log(`  - Directorio temp: /tmp/`);
 });
 
-// ✅ 10. AUMENTAR TIMEOUTS PARA ARCHIVOS GRANDES
+// ✅ 9. TIMEOUTS PARA ARCHIVOS GRANDES
 server.headersTimeout = 3600000;  // 1 hora
 server.requestTimeout = 3600000;  // 1 hora
-server.keepAliveTimeout = 60000;  // 1 minuto
+server.keepAliveTimeout = 60000;
 
-// ✅ 11. MANEJAR CIERRE GRACIOSO
+// ✅ 10. CIERRE GRACIOSO
 process.on('SIGTERM', () => {
-    console.log('🛑 Recibido SIGTERM, cerrando servidor...');
+    console.log('🛑 Cerrando servidor...');
     server.close(() => {
         console.log('✅ Servidor cerrado');
         process.exit(0);
@@ -117,16 +96,14 @@ function getLocalIP() {
 
             const ip = iface.address;
 
-            // ignorar rangos típicos virtuales
             if (
-                ip.startsWith("192.168.56.") || // VirtualBox
-                ip.startsWith("172.17.") ||     // Docker
-                ip.startsWith("169.254.")       // APIPA
+                ip.startsWith("192.168.56.") ||
+                ip.startsWith("172.17.") ||
+                ip.startsWith("169.254.")
             ) {
                 continue;
             }
 
-            // priorizar red local típica
             if (
                 ip.startsWith("192.168.") ||
                 ip.startsWith("10.") ||
@@ -136,7 +113,6 @@ function getLocalIP() {
                 return ip;
             }
 
-            // fallback si no hay mejor opción
             if (!fallback) fallback = ip;
         }
     }

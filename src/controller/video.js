@@ -205,20 +205,44 @@ export const playVideo = (req, res) => {
     });
 };
 
+import path from "path";
+import fs from "fs";
+import { videoFolder } from "../utils/alias.js";
+import { mapDirectory } from "../services/directoryMapper.js";
+import { cleanOrphanThumbnails } from '../services/gc.js';
+import { enqueueThumbnail } from '../services/thumbnailQueue.js';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
+import util from 'util';
+import { exec } from 'child_process';
+
+ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeInstaller.path);
+const execPromise = util.promisify(exec);
+
+// ========== SUBIR VIDEO (LÓGICA COMPLETA) ==========
 export const uploadVideo = async (req, res) => {
-    console.log('=== Iniciando upload ===');
-    console.log('Body:', req.body);
-    console.log('Files:', req.files);
+    console.log('=== 📤 INICIANDO SUBIDA DE VIDEO ===');
     
     try {
+        // Validar que exista req.body
+        if (!req.body) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'No se recibieron datos del formulario' 
+            });
+        }
+
         const { targetFolder } = req.body;
         const videoFile = req.files?.video;
         
-        console.log('targetFolder:', targetFolder);
-        console.log('videoFile:', videoFile ? videoFile.name : 'No file');
+        console.log('📁 Carpeta destino:', targetFolder || 'raíz');
+        console.log('🎬 Archivo:', videoFile?.name);
+        console.log('📊 Tamaño:', videoFile?.size ? (videoFile.size / (1024*1024)).toFixed(2) + ' MB' : 'No especificado');
         
+        // Validar archivo
         if (!videoFile) {
-            console.log('Error: No se recibió archivo');
             return res.status(400).json({ 
                 success: false, 
                 error: 'No se recibió ningún archivo de video' 
@@ -229,8 +253,6 @@ export const uploadVideo = async (req, res) => {
         const allowedExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
         const fileExt = path.extname(videoFile.name).toLowerCase();
         
-        console.log('Extensión del archivo:', fileExt);
-        
         if (!allowedExtensions.includes(fileExt)) {
             return res.status(400).json({ 
                 success: false, 
@@ -240,25 +262,21 @@ export const uploadVideo = async (req, res) => {
 
         // Determinar ruta de destino
         let destinationPath = videoFolder;
-        console.log('Video folder base:', videoFolder);
         
         if (targetFolder && targetFolder !== 'raiz' && targetFolder !== '') {
             destinationPath = path.join(videoFolder, targetFolder);
-            console.log('Destino con subcarpeta:', destinationPath);
             
             if (!fs.existsSync(destinationPath)) {
-                console.log('Creando carpeta:', destinationPath);
+                console.log('📁 Creando carpeta:', destinationPath);
                 fs.mkdirSync(destinationPath, { recursive: true });
             }
         }
 
-        // Normalizar nombre
+        // Normalizar nombre del archivo
         const normalizedName = videoFile.name.replace(/\s+/g, '_');
         const finalPath = path.join(destinationPath, normalizedName);
         
-        console.log('Ruta final:', finalPath);
-        
-        // Verificar si existe
+        // Verificar si ya existe
         if (fs.existsSync(finalPath)) {
             return res.status(409).json({ 
                 success: false, 
@@ -266,10 +284,11 @@ export const uploadVideo = async (req, res) => {
             });
         }
 
-        // Mover archivo
-        console.log('Moviendo archivo...');
+        // Mover archivo al destino final
+        console.log('💾 Guardando en:', finalPath);
         await videoFile.mv(finalPath);
-        console.log('Archivo movido exitosamente');
+        
+        console.log('✅ Video subido exitosamente');
         
         res.status(200).json({
             success: true,
@@ -278,13 +297,13 @@ export const uploadVideo = async (req, res) => {
                 originalName: videoFile.name,
                 savedName: normalizedName,
                 path: finalPath,
-                folder: targetFolder || 'raiz'
+                folder: targetFolder || 'raiz',
+                size: videoFile.size
             }
         });
         
     } catch (error) {
-        console.error('❌ Error DETALLADO al subir video:', error);
-        console.error('Stack:', error.stack);
+        console.error('❌ Error al subir video:', error);
         res.status(500).json({ 
             success: false, 
             error: `Error interno: ${error.message}` 
@@ -292,3 +311,175 @@ export const uploadVideo = async (req, res) => {
     }
 };
 
+// ========== OBTENER VIDEOS Y CARPETAS ==========
+export const getVideos = async (req, res) => {
+    try {
+        const subPath = req.query.path || '';
+        let targetPath = videoFolder;
+
+        if (subPath) {
+            const cleanPath = subPath.replace(/\.\./g, '').replace(/\/+/g, '/');
+            targetPath = path.join(videoFolder, cleanPath);
+            
+            if (!targetPath.startsWith(videoFolder)) {
+                return res.status(403).json({ error: "Acceso denegado" });
+            }
+        }
+        
+        if (!fs.existsSync(targetPath)) {
+            return res.status(404).json({ error: "Carpeta no encontrada" });
+        }
+        
+        const data = mapDirectory(targetPath);
+        
+        const folderData = data.folders.map(folder => ({
+            name: folder.name,
+            type: 'folder',
+            displayName: folder.name
+        }));
+
+        const videoData = data.videos.map(file => {
+            enqueueThumbnail(file.name, subPath);  
+            const baseName = path.parse(file.name).name;
+            
+            return {
+                ...file,
+                thumbnail: `/thumbnails/${baseName}`, 
+                type: 'video'
+            };
+        });
+        
+        res.json({
+            folders: folderData,
+            videos: videoData,
+            currentPath: subPath || '',
+            parentPath: subPath ? path.dirname(subPath) : null
+        });
+        
+    } catch (err) {
+        console.error("Error en getVideos:", err);
+        res.status(500).json({ error: "No se pudo procesar la lista" });
+    }
+};
+
+// ========== REPRODUCIR VIDEO ==========
+export const playVideo = (req, res) => {
+    const videoName = req.params.videoName;
+    const videoPath = path.join(videoFolder, videoName);
+
+    if (!fs.existsSync(videoPath)) {
+        return res.status(404).send('Video no encontrado');
+    }
+
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    ffmpeg.ffprobe(videoPath, (err, metadata) => {
+        if (err) {
+            console.error('Error analizando video:', err);
+            return res.status(500).send('Error al procesar video');
+        }
+
+        const videoStream = metadata.streams.find(s => s.codec_type === 'video');
+        const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
+        const videoCodec = videoStream ? videoStream.codec_name : '';
+        const audioCodec = audioStream ? audioStream.codec_name : '';
+        const duration = metadata.format.duration;
+
+        const problematicVideo = ['hevc', 'h265', 'vp9', 'av1', 'wmv', 'divx', 'xvid', 'mjpeg'];
+        const problematicAudio = ['ac3', 'eac3', 'dts', 'dts-hd', 'truehd', 'opus', 'flac', 'vorbis'];
+
+        const needsVideoTranscode = videoCodec !== 'h264' || problematicVideo.includes(videoCodec);
+        const needsAudioTranscode = problematicAudio.includes(audioCodec);
+        const needsTranscoding = needsVideoTranscode || needsAudioTranscode;
+
+        console.log(`[Streaming] ${videoName}`);
+        console.log(`🎬 Video: ${videoCodec} -> ${needsVideoTranscode ? '🔄 Recodificando' : '✅ Directo'}`);
+        console.log(`🎵 Audio: ${audioCodec} -> ${needsAudioTranscode ? '🔄 Recodificando' : '✅ Directo'}`);
+
+        let ffmpegProcess = null;
+        let fileStream = null;
+
+        req.on('close', () => {
+            if (ffmpegProcess) ffmpegProcess.kill('SIGKILL');
+            if (fileStream) fileStream.destroy();
+        });
+
+        const getTranscodeOptions = () => {
+            const options = [
+                '-movflags frag_keyframe+empty_moov+faststart',
+                '-pix_fmt yuv420p',
+                '-sn'
+            ];
+
+            if (needsVideoTranscode) {
+                options.push('-c:v libx264');
+                options.push('-preset superfast');
+                options.push('-crf 23');
+                options.push('-profile:v main');
+                options.push('-level 4.0');
+            } else {
+                options.push('-c:v copy');
+            }
+
+            if (needsAudioTranscode) {
+                options.push('-c:a aac');
+                options.push('-ac 2');
+                options.push('-b:a 128k');
+            } else {
+                options.push('-c:a copy');
+            }
+
+            return options;
+        };
+
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+
+            if (needsTranscoding) {
+                const startTime = (start / fileSize) * duration;
+                
+                res.writeHead(206, {
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Type': 'video/mp4'
+                });
+
+                ffmpegProcess = ffmpeg(videoPath)
+                    .setStartTime(startTime)
+                    .outputOptions(getTranscodeOptions())
+                    .on('error', (err) => {
+                        if (!err.message.includes('SIGKILL')) console.error('FFmpeg error:', err.message);
+                        res.end();
+                    })
+                    .pipe(res, { end: true });
+            } else {
+                res.writeHead(206, {
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': chunksize,
+                    'Content-Type': 'video/mp4'
+                });
+                fileStream = fs.createReadStream(videoPath, { start, end });
+                fileStream.pipe(res);
+            }
+        } else {
+            res.writeHead(200, { 'Content-Type': 'video/mp4' });
+            
+            if (needsTranscoding) {
+                ffmpegProcess = ffmpeg(videoPath)
+                    .outputOptions(getTranscodeOptions())
+                    .on('error', (err) => res.end())
+                    .pipe(res, { end: true });
+            } else {
+                res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });
+                fileStream = fs.createReadStream(videoPath);
+                fileStream.pipe(res);
+            }
+        }
+    });
+};
