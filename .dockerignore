@@ -1,0 +1,8 @@
+node_modules
+npm-debug.log
+.git
+.env
+# Ignora las carpetas de videos pesados para que no entren en la imagen
+*.mp4
+*.mkv
+src/videos/

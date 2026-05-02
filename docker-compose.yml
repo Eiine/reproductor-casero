@@ -1,0 +1,16 @@
+
+
+services:
+  app:
+    build: .
+    container_name: reproductor-casero
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    deploy:
+      resources:
+        limits:
+          memory: 512M
