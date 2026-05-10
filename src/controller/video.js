@@ -14,6 +14,112 @@ ffmpeg.setFfmpegPath(ffmpegStatic);
 ffmpeg.setFfprobePath(ffprobeInstaller.path);
 const execPromise = util.promisify(exec);
 
+// ========== SUBIR MÚLTIPLES VIDEOS (CARPETA COMPLETA) - NUEVO ENDPOINT ==========
+export const uploadMultipleVideos = async (req, res) => {
+    console.log('=== 📦 INICIANDO CARGA MASIVA DE VIDEOS ===');
+    
+    try {
+        const { targetFolder } = req.body;
+        const videoFiles = req.files?.videos;
+        
+        if (!videoFiles) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'No se recibieron archivos de video' 
+            });
+        }
+        
+        // Asegurar que sea un array
+        const filesArray = Array.isArray(videoFiles) ? videoFiles : [videoFiles];
+        
+        console.log(`📁 Carpeta destino: ${targetFolder || 'raíz'}`);
+        console.log(`🎬 Archivos a subir: ${filesArray.length}`);
+        
+        // Determinar ruta de destino
+        let destinationPath = videoFolder;
+        
+        if (targetFolder && targetFolder !== 'raiz' && targetFolder !== '') {
+            destinationPath = path.join(videoFolder, targetFolder);
+            
+            if (!fs.existsSync(destinationPath)) {
+                console.log('📁 Creando carpeta:', destinationPath);
+                fs.mkdirSync(destinationPath, { recursive: true });
+            }
+        }
+        
+        const results = [];
+        const errors = [];
+        
+        for (const videoFile of filesArray) {
+            try {
+                // Validar extensión
+                const allowedExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
+                const fileExt = path.extname(videoFile.name).toLowerCase();
+                
+                if (!allowedExtensions.includes(fileExt)) {
+                    errors.push({ 
+                        name: videoFile.name, 
+                        error: `Formato no soportado. Permitidos: ${allowedExtensions.join(', ')}` 
+                    });
+                    continue;
+                }
+                
+                // Normalizar nombre del archivo
+                const normalizedName = videoFile.name.replace(/\s+/g, '_');
+                const finalPath = path.join(destinationPath, normalizedName);
+                
+                // Verificar si ya existe
+                if (fs.existsSync(finalPath)) {
+                    errors.push({ 
+                        name: videoFile.name, 
+                        error: 'Ya existe un archivo con este nombre' 
+                    });
+                    continue;
+                }
+                
+                // Mover archivo
+                await videoFile.mv(finalPath);
+                results.push({
+                    name: videoFile.name,
+                    savedName: normalizedName,
+                    path: finalPath,
+                    size: videoFile.size
+                });
+                
+                console.log(`✅ Subido: ${videoFile.name}`);
+                
+            } catch (error) {
+                console.error(`❌ Error con ${videoFile.name}:`, error);
+                errors.push({ 
+                    name: videoFile.name, 
+                    error: error.message 
+                });
+            }
+        }
+        
+        console.log(`📊 Resumen: ${results.length} exitosos, ${errors.length} fallidos`);
+        
+        res.status(200).json({
+            success: true,
+            message: `Procesados ${filesArray.length} archivos. ${results.length} subidos correctamente, ${errors.length} fallaron.`,
+            data: {
+                successful: results,
+                failed: errors,
+                total: filesArray.length,
+                folder: targetFolder || 'raiz'
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Error en carga masiva:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: `Error interno: ${error.message}` 
+        });
+    }
+};
+
+
 // ========== SUBIR VIDEO (LÓGICA COMPLETA) ==========
 export const uploadVideo = async (req, res) => {
     console.log('=== 📤 INICIANDO SUBIDA DE VIDEO ===');
@@ -276,3 +382,4 @@ export const playVideo = (req, res) => {
         }
     });
 };
+

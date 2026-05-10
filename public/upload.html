@@ -5,6 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Server - Subidor</title>
     <link rel="stylesheet" href="style2.css">
+    <style>
+        /* Estilos adicionales para la nueva funcionalidad */
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        .tab-btn.active {
+            background: #9d4edd;
+            color: white;
+        }
+        .massive-panel {
+            transition: all 0.3s;
+        }
+        .massive-folder-btn {
+            background: #333;
+            color: #e0e0e0;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .massive-folder-btn.active {
+            background: #9d4edd;
+            color: white;
+        }
+        .massive-folder-btn:hover {
+            background: #7b2cbf;
+        }
+        .file-list-container {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .file-list-container h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #9d4edd;
+        }
+        .file-item {
+            padding: 5px;
+            border-bottom: 1px solid #333;
+            font-size: 12px;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .total-count {
+            padding: 5px;
+            margin-top: 5px;
+            color: #9d4edd;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <div id="app">
@@ -17,7 +78,7 @@
         <h1>📹 SUBIDOR DE VIDEOS</h1>
         
         <div class="upload-section">
-            <!-- SECCIÓN PARA SUBIR VIDEO -->
+            <!-- SECCIÓN PARA SUBIR VIDEO INDIVIDUAL -->
             <div class="upload-area" id="uploadArea">
                 <div class="upload-icon">🎬</div>
                 <h3>Arrastra o haz clic para seleccionar un video</h3>
@@ -51,21 +112,77 @@
 
             <button id="uploadBtn" class="upload-btn" disabled>🚀 SUBIR VIDEO</button>
 
-            <!-- NUEVA SECCIÓN PARA DESCARGA DESDE TXT -->
+            <!-- NUEVA SECCIÓN PARA CARGA MASIVA -->
             <div class="download-section" style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #333;">
-                <h3>📥 DESCARGA MASIVA DESDE TEXTO</h3>
-                <p style="color: #aaa; font-size: 14px;">Sube un archivo .txt con links de YouTube, Google Drive o URLs directas (uno por línea)</p>
+                <h3>📦 CARGA MASIVA</h3>
                 
-                <div class="upload-area" id="textUploadArea" style="background: #1a1a2e; border: 2px dashed #9d4edd;">
-                    <div class="upload-icon">📄</div>
-                    <h3>Arrastra o haz clic para seleccionar archivo de texto</h3>
-                    <p>Formatos: .txt, .md, .csv | Con links de descarga</p>
-                    <input type="file" id="textFileInput" accept=".txt,.md,.csv" style="display: none;">
+                <!-- Pestañas de selección -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="massiveUrlsTab" class="tab-btn active" style="background: #9d4edd;">🔗 Desde URLs (TXT)</button>
+                    <button id="massiveFolderTab" class="tab-btn" style="background: #555;">📁 Subir carpeta completa</button>
                 </div>
                 
-                <div class="file-info" id="textFileInfo" style="display: none;"></div>
+                <!-- Panel 1: URLs desde TXT -->
+                <div id="urlsPanel" class="massive-panel">
+                    <p style="color: #aaa; font-size: 14px;">Sube un archivo .txt con links de YouTube, Google Drive o URLs directas (uno por línea)</p>
+                    
+                    <div class="upload-area" id="textUploadArea" style="background: #1a1a2e; border: 2px dashed #9d4edd;">
+                        <div class="upload-icon">📄</div>
+                        <h3>Arrastra o haz clic para seleccionar archivo de texto</h3>
+                        <p>Formatos: .txt, .md, .csv | Con links de descarga</p>
+                        <input type="file" id="textFileInput" accept=".txt,.md,.csv" style="display: none;">
+                    </div>
+                    
+                    <div class="file-info" id="textFileInfo" style="display: none;"></div>
+                    <button id="downloadFromTextBtn" class="upload-btn" style="background: #e67e22; margin-top: 15px;">📥 DESCARGAR VIDEOS DESDE TEXTO</button>
+                </div>
                 
-                <button id="downloadFromTextBtn" class="upload-btn" style="background: #e67e22; margin-top: 15px;">📥 DESCARGAR VIDEOS DESDE TEXTO</button>
+                <!-- Panel 2: Subir carpeta completa -->
+                <div id="folderPanel" class="massive-panel" style="display: none;">
+                    <p style="color: #aaa; font-size: 14px;">Selecciona una carpeta completa para subir todos sus videos</p>
+                    
+                    <div class="upload-area" id="folderUploadArea" style="background: #1a1a2e; border: 2px dashed #e67e22;">
+                        <div class="upload-icon">📁</div>
+                        <h3>Haz clic para seleccionar una carpeta</h3>
+                        <p>Sube todos los videos de una carpeta (manteniendo la estructura)</p>
+                        <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;">
+                    </div>
+                    
+                    <div id="folderFileList" class="file-list-container" style="display: none;">
+                        <h4>📋 Archivos seleccionados:</h4>
+                        <div id="fileListContent"></div>
+                    </div>
+                    
+                    <div class="folder-selection" style="margin-top: 15px;">
+                        <label>📁 Carpeta de destino en el servidor:</label>
+                        <div class="folder-options">
+                            <button type="button" class="massive-folder-btn active" data-massive-folder="raiz">📂 Raíz</button>
+                            <button type="button" class="massive-folder-btn" data-massive-folder="existente">📁 Carpeta existente</button>
+                            <button type="button" class="massive-folder-btn" data-massive-folder="nueva">✨ Crear nueva carpeta</button>
+                        </div>
+
+                        <div class="existing-folders" id="massiveExistingFolders" style="display: none;">
+                            <select id="massiveFolderSelect" class="folder-select">
+                                <option value="">Selecciona una carpeta...</option>
+                            </select>
+                        </div>
+
+                        <div class="new-folder-input" id="massiveNewFolderInput" style="display: none;">
+                            <input type="text" id="massiveNewFolderName" placeholder="Nombre de la nueva carpeta" maxlength="50" class="folder-input">
+                        </div>
+                    </div>
+                    
+                    <button id="uploadFolderBtn" class="upload-btn" style="background: #e67e22; margin-top: 15px;" disabled>🚀 SUBIR CARPETA COMPLETA</button>
+                </div>
+                
+                <!-- Barra de progreso para carga masiva -->
+                <div class="progress-container" id="massiveProgressContainer" style="display: none; margin-top: 20px;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="massiveProgressFill">0%</div>
+                    </div>
+                    <div class="progress-status" id="massiveProgressStatus">Preparando...</div>
+                    <div id="massiveFileProgress" style="font-size: 12px; color: #aaa; margin-top: 5px;"></div>
+                </div>
             </div>
 
             <div class="progress-container" id="progressContainer" style="display: none;">
