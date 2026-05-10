@@ -8,8 +8,8 @@ import { videoFolder } from '../utils/alias.js';
 
 const DB_PATH = path.join(process.cwd(), 'processed_videos.json');
 
-// 🔒 Límite por ejecución (por día)
-const MAX_PER_RUN = 2;
+// 🔒 Límite por ejecución (por día) - CAMBIADO DE 2 A 10
+const MAX_PER_RUN = 10;  // ✅ Ahora procesa hasta 10 videos por ejecución
 
 // --- PERSISTENCIA ---
 async function getProcessedVideos() {
@@ -148,7 +148,7 @@ async function ejecutarMantenimiento(currentPath, processedList, state) {
 
 // --- CRON ---
 export const startOptimizationCron = () => {
-    console.log("⏰ Cron activo (máx 2 videos por día a las 03:00 AM)");
+    console.log(`⏰ Cron activo (máx ${MAX_PER_RUN} videos por día a las 03:00 AM)`);
 
     cron.schedule('0 3 * * *', async () => {
         console.log('🌙 [Cron] Iniciando mantenimiento...');
@@ -167,7 +167,7 @@ export const startOptimizationCron = () => {
 
             await ejecutarMantenimiento(videoFolder, processedList, state);
 
-            console.log(`🏁 Finalizado. Total procesados hoy: ${state.processedToday}`);
+            console.log(`🏁 Finalizado. Total procesados hoy: ${state.processedToday}/${MAX_PER_RUN}`);
 
         } catch (err) {
             console.error("❌ Error crítico:", err);
