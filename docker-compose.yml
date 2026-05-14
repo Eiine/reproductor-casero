@@ -10,6 +10,7 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
+      - direccion de la carpeta:/app/src/videos
     deploy:
       resources:
         limits:
