@@ -237,7 +237,15 @@ export const getVideos = async (req, res) => {
             displayName: folder.name
         }));
 
-        const videoData = data.videos.map(file => {
+        // 🛡️ FILTRO APLICADO AQUÍ: Filtramos la lista de videos antes de encolar y mapear
+        const videosFiltrados = data.videos.filter(file => {
+            const name = file.name.toLowerCase();
+            // Ignora archivos temporales comunes y el patrón del optimizador
+            return !name.endsWith('.tmp') && !name.includes('_opt.tmp');
+        });
+
+        // Mapeamos y encolamos usando únicamente los videos válidos
+        const videoData = videosFiltrados.map(file => {
             enqueueThumbnail(file.name, subPath);  
             const baseName = path.parse(file.name).name;
             
