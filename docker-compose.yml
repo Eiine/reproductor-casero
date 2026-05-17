@@ -14,7 +14,4 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
       - "/almacenamiento/videos:/app/src/videos"
-    deploy:
-      resources:
-        limits:
-          memory: 1024M
+ 
