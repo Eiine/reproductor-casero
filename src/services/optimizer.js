@@ -419,7 +419,7 @@ export const startOptimizationCron = () => {
     console.log(`⏰ Cron activo (máx ${MAX_PER_RUN} videos por día a las 03:00 AM)`);
     console.log(`⚙️  Configuración para hardware limitado: ${MAX_CONCURRENT_OPTIMIZATIONS} optimización concurrente`);
     
-    cron.schedule('10 13 * * *', async () => {
+    cron.schedule('22 13 * * *', async () => {
         console.log('\n' + '='.repeat(50));
         console.log(`🕒 Ejecución programada: ${new Date().toLocaleString()}`);
         console.log('='.repeat(50));

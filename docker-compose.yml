@@ -1,5 +1,4 @@
 
-
 services:
   app:
     build: .
@@ -10,7 +9,9 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-      - direccion de la carpeta:/app/src/videos
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - "/almacenamiento/videos:/app/src/videos"
     deploy:
       resources:
         limits:
