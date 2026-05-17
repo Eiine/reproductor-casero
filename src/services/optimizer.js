@@ -7,6 +7,17 @@ import { spawn } from 'child_process';
 import { mapDirectory } from './directoryMapper.js';
 import { videoFolder } from '../utils/alias.js';
 
+// 🔧 IMPORTAR Y CONFIGURAR LOS BINARIOS
+import ffmpegStatic from 'ffmpeg-static';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
+
+// ✅ CONFIGURAR fluent-ffmpeg para usar los binarios empaquetados
+ffmpeg.setFfmpegPath(ffmpegStatic);
+ffmpeg.setFfprobePath(ffprobeInstaller.path);
+
+// Obtener la ruta real del binario ffprobe
+const FFPROBE_PATH = ffprobeInstaller.path;
+
 const DB_PATH = path.join(process.cwd(), 'processed_videos.json');
 
 // 🔒 Límite por ejecución (por día)
@@ -64,7 +75,7 @@ async function saveProcessed(videoPath) {
     }
 }
 
-// 🔥 NUEVO: FFPROBE EN PROCESO HIJO INDEPENDIENTE
+// 🔥 NUEVO: FFPROBE EN PROCESO HIJO INDEPENDIENTE (USANDO EL BINARIO CORRECTO)
 const getVideoInfo = (videoPath) => {
     return new Promise((resolve, reject) => {
         // Detectar si estamos en disco mecánico
@@ -77,7 +88,8 @@ const getVideoInfo = (videoPath) => {
         
         console.log(`   🔍 [Probe] Analizando: ${path.basename(videoPath)} (${isSlowDisk ? 'HDD' : 'SSD'})`);
         
-        const probeProcess = spawn('ffprobe', [
+        // ✅ USAR LA RUTA DEL BINARIO INSTALADO
+        const probeProcess = spawn(FFPROBE_PATH, [
             '-v', 'quiet',
             '-print_format', 'json',
             '-show_streams',
@@ -175,6 +187,7 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
         
         console.log(`   🎬 [Encode] Iniciando codificación H264/AAC...`);
         
+        // ✅ fluent-ffmpeg YA TIENE CONFIGURADOS LOS BINARIOS (setFfmpegPath arriba)
         ffmpegProcess = ffmpeg(videoPath)
             .outputOptions([
                 '-c:v libx264',
