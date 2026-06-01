@@ -10,8 +10,8 @@ import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 import util from 'util';
 import { exec } from 'child_process';
 
-ffmpeg.setFfmpegPath(ffmpegStatic);
-ffmpeg.setFfprobePath(ffprobeInstaller.path);
+ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+ffmpeg.setFfprobePath('/usr/bin/ffprobe');
 const execPromise = util.promisify(exec);
 
 // ========== SUBIR MÚLTIPLES VIDEOS (CARPETA COMPLETA) - NUEVO ENDPOINT ==========
@@ -284,7 +284,7 @@ export const playVideo = (req, res) => {
 
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
         if (err) {
-            console.error('Error analizando video:', err);
+            console.error('❌ Error analizando video en streaming:', err);
             return res.status(500).send('Error al procesar video');
         }
 
@@ -292,8 +292,9 @@ export const playVideo = (req, res) => {
         const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
         const videoCodec = videoStream ? videoStream.codec_name : '';
         const audioCodec = audioStream ? audioStream.codec_name : '';
-        const duration = metadata.format.duration;
+        const duration = metadata.format?.duration || 0;
 
+        // Codecs pesados o incompatibles con streaming web directo
         const problematicVideo = ['hevc', 'h265', 'vp9', 'av1', 'wmv', 'divx', 'xvid', 'mjpeg'];
         const problematicAudio = ['ac3', 'eac3', 'dts', 'dts-hd', 'truehd', 'opus', 'flac', 'vorbis'];
 
@@ -301,16 +302,22 @@ export const playVideo = (req, res) => {
         const needsAudioTranscode = problematicAudio.includes(audioCodec);
         const needsTranscoding = needsVideoTranscode || needsAudioTranscode;
 
-        console.log(`[Streaming] ${videoName}`);
-        console.log(`🎬 Video: ${videoCodec} -> ${needsVideoTranscode ? '🔄 Recodificando' : '✅ Directo'}`);
-        console.log(`🎵 Audio: ${audioCodec} -> ${needsAudioTranscode ? '🔄 Recodificando' : '✅ Directo'}`);
+        console.log(`\n🎬 [Streaming] Solicitado: ${videoName}`);
+        console.log(`🎥 Video Codec: ${videoCodec} -> ${needsVideoTranscode ? '🔄 Transcodificando en vivo' : '✅ Transmisión Directa'}`);
+        console.log(`🎵 Audio Codec: ${audioCodec} -> ${needsAudioTranscode ? '🔄 Transcodificando en vivo' : '✅ Transmisión Directa'}`);
 
         let ffmpegProcess = null;
         let fileStream = null;
 
+        // Limpieza absoluta al cerrar la pestaña o pausar para evitar procesos zombies
         req.on('close', () => {
-            if (ffmpegProcess) ffmpegProcess.kill('SIGKILL');
-            if (fileStream) fileStream.destroy();
+            if (ffmpegProcess) {
+                console.log(`🛑 [Streaming] Deteniendo transcodificación de ${videoName}`);
+                ffmpegProcess.kill('SIGKILL');
+            }
+            if (fileStream) {
+                fileStream.destroy();
+            }
         });
 
         const getTranscodeOptions = () => {
@@ -322,8 +329,8 @@ export const playVideo = (req, res) => {
 
             if (needsVideoTranscode) {
                 options.push('-c:v libx264');
-                options.push('-preset superfast');
-                options.push('-crf 23');
+                options.push('-preset superfast'); // Clave absoluta para no ahogar el micro
+                options.push('-crf 24');           // Un punto más de compresión balancea la carga en vivo
                 options.push('-profile:v main');
                 options.push('-level 4.0');
             } else {
@@ -348,8 +355,10 @@ export const playVideo = (req, res) => {
             const chunksize = (end - start) + 1;
 
             if (needsTranscoding) {
-                const startTime = (start / fileSize) * duration;
+                // Si requiere convertirse en vivo, calculamos el punto de tiempo para saltar allá
+                const startTime = duration ? (start / fileSize) * duration : 0;
                 
+                // En transcodificación viva NO enviamos Content-Length estático porque altera al navegador
                 res.writeHead(206, {
                     'Content-Range': `bytes ${start}-${end}/${fileSize}`,
                     'Accept-Ranges': 'bytes',
@@ -357,30 +366,39 @@ export const playVideo = (req, res) => {
                 });
 
                 ffmpegProcess = ffmpeg(videoPath)
-                    .setStartTime(startTime)
+                    .setStartTime(startTime.toFixed(2))
                     .outputOptions(getTranscodeOptions())
+                    .toFormat('mp4')
                     .on('error', (err) => {
-                        if (!err.message.includes('SIGKILL')) console.error('FFmpeg error:', err.message);
-                        res.end();
+                        if (!err.message.includes('SIGKILL') && !err.message.includes('Output stream closed')) {
+                            console.error('❌ Error FFmpeg en streaming:', err.message);
+                        }
+                        try { res.end(); } catch {}
                     })
                     .pipe(res, { end: true });
             } else {
+                // Transmisión nativa por partes (Lectura directa ultra veloz)
                 res.writeHead(206, {
                     'Content-Range': `bytes ${start}-${end}/${fileSize}`,
                     'Accept-Ranges': 'bytes',
                     'Content-Length': chunksize,
                     'Content-Type': 'video/mp4'
                 });
+                
                 fileStream = fs.createReadStream(videoPath, { start, end });
                 fileStream.pipe(res);
             }
         } else {
-            res.writeHead(200, { 'Content-Type': 'video/mp4' });
-            
+            // Reproducción desde el segundo 0
             if (needsTranscoding) {
+                res.writeHead(200, { 'Content-Type': 'video/mp4' });
+                
                 ffmpegProcess = ffmpeg(videoPath)
                     .outputOptions(getTranscodeOptions())
-                    .on('error', (err) => res.end())
+                    .toFormat('mp4')
+                    .on('error', (err) => {
+                        try { res.end(); } catch {}
+                    })
                     .pipe(res, { end: true });
             } else {
                 res.writeHead(200, { 'Content-Length': fileSize, 'Content-Type': 'video/mp4' });
@@ -390,4 +408,3 @@ export const playVideo = (req, res) => {
         }
     });
 };
-

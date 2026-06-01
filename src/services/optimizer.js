@@ -7,16 +7,13 @@ import { spawn } from 'child_process';
 import { mapDirectory } from './directoryMapper.js';
 import { videoFolder } from '../utils/alias.js';
 
-// 🔧 IMPORTAR Y CONFIGURAR LOS BINARIOS
-import ffmpegStatic from 'ffmpeg-static';
-import ffprobeInstaller from '@ffprobe-installer/ffprobe';
+// 🔧 CONFIGURACIÓN PARA DOCKER GLOBAL
+// Forzamos el uso de los binarios globales del sistema (Debian Slim en tu Phenom 955)
+ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+ffmpeg.setFfprobePath('/usr/bin/ffprobe');
 
-// ✅ CONFIGURAR fluent-ffmpeg para usar los binarios empaquetados
-ffmpeg.setFfmpegPath(ffmpegStatic);
-ffmpeg.setFfprobePath(ffprobeInstaller.path);
-
-// Obtener la ruta real del binario ffprobe
-const FFPROBE_PATH = ffprobeInstaller.path;
+// Ruta global para el spawn manual de ffprobe
+const FFPROBE_PATH = '/usr/bin/ffprobe';
 
 const DB_PATH = path.join(process.cwd(), 'processed_videos.json');
 
@@ -181,7 +178,7 @@ const needsOptimization = (metadata, ext) => {
     return !(isMP4 && isH264 && isAAC && isLevelOk && isAudioOk);
 };
 
-// 🔥 CODIFICACIÓN SIN TIMEOUT (CON MANEJO ROBUSTO DE PROCESOS)
+// 🔥 CODIFICACIÓN SIN TIMEOUT
 const encodeVideo = (videoPath, tempPath, finalPath) => {
     return new Promise((resolve, reject) => {
         let ffmpegProcess = null;
@@ -190,7 +187,6 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
         console.log(`    🎬 [Encode] Iniciando codificación H264/AAC...`);
         console.log(`    ⏱️  [Encode] Sin límite de tiempo - el proceso durará lo necesario`);
         
-        // ✅ CORRECCIÓN: Configuramos la salida limpia mediante .output() y .run()
         ffmpegProcess = ffmpeg(videoPath)
             .output(tempPath)
             .outputOptions([
@@ -198,7 +194,7 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
                 '-profile:v high',
                 '-level:v 4.0',
                 '-crf 23',
-                '-preset superfast', // Un toque más liviano para el Phenom 955
+                '-preset superfast',
                 '-c:a aac',
                 '-ar 44100',
                 '-b:a 125k',
@@ -258,10 +254,8 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
                 reject(e);
             });
             
-        // Disparar el proceso de fluent-ffmpeg de forma correcta
         ffmpegProcess.run();
         
-        // Limpieza garantizada al salir del proceso principal
         const cleanExit = () => {
             if (ffmpegProcess && ffmpegProcess.ffmpegProc && !ffmpegProcess.ffmpegProc.killed) {
                 console.log(`    🧹 Limpiando proceso FFmpeg huérfano...`);
@@ -282,7 +276,8 @@ const optimizeVideo = async (videoPath) => {
         const ext = path.extname(videoPath);
         const baseName = path.basename(videoPath, ext);
         
-        const tempPath = path.join(dir, `${baseName}_opt.tmp.mp4`);
+        // Estabilizamos el nombre del temporal usando marcas de tiempo para evitar colisiones
+        const tempPath = path.join(dir, `optimized_temp_${Date.now()}.mp4`);
         const finalPath = path.join(dir, `${baseName}.mp4`);
         
         console.log(`\n🎬 [Optimizer] Procesando: ${baseName}${ext}`);
@@ -376,7 +371,7 @@ async function limpiarTemporalesHuérfanos(directory) {
                 
                 if (stat && stat.isDirectory()) {
                     await limpiarRecursivo(fullPath);
-                } else if (file.includes('_opt.tmp.mp4')) {
+                } else if (file.includes('optimized_temp_') || file.includes('_opt.tmp.mp4')) {
                     console.log(`    🗑️ Eliminando temporal huérfano: ${file}`);
                     await fs.unlink(fullPath).catch(() => {});
                 }
@@ -388,28 +383,23 @@ async function limpiarTemporalesHuérfanos(directory) {
     
     await limpiarRecursivo(directory);
     
-    // 🔥 CORRECCIÓN MULTIPLATAFORMA PARA PROCESOS ZOMBIES
     console.log('🧹 Verificando procesos FFmpeg zombies...');
     try {
         const { exec } = await import('child_process');
         const isWin = process.platform === 'win32';
         
-        // Windows usa taskkill, Linux usa pkill
         const cmd = isWin 
             ? 'taskkill /f /im ffmpeg.exe' 
-            : 'pkill -f "ffmpeg.*_opt.tmp.mp4"';
+            : 'pkill -f "ffmpeg.*optimized_temp_"';
 
         exec(cmd, (error) => {
             if (error) {
-                // En Windows/Linux un exit code de error suele significar que no había procesos para matar
                 console.log('    ✅ No se encontraron procesos zombies activos');
             } else {
                 console.log('    🗑️ Procesos zombies eliminados del sistema');
             }
         });
-    } catch (e) {
-        // Ignorar si no se puede ejecutar
-    }
+    } catch (e) {}
     
     console.log('✅ Limpieza completada\n');
 }
@@ -461,7 +451,6 @@ async function runOptimization() {
 
 // --- CRON ---
 export const startOptimizationCron = () => {
-    // Ajustado el log para que refleje fielmente las 16:02 hs configuradas en la regla
     console.log(`⏰ Cron activo (máx ${MAX_PER_RUN} videos por día a las 04:02 PM)`);
     console.log(`⚙️  Configuración para hardware limitado: ${MAX_CONCURRENT_OPTIMIZATIONS} optimización concurrente`);
     console.log(`✅ Sin límite de tiempo para codificación - los videos tardarán lo necesario`);
@@ -479,5 +468,4 @@ export const startOptimizationCron = () => {
     });
 };
 
-// Exportar funciones útiles para debugging
 export { runOptimization, limpiarTemporalesHuérfanos, getProcessedVideos };

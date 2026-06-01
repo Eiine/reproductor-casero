@@ -11,6 +11,11 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// 🔧 CONFIGURACIÓN PARA DOCKER: Forzamos el uso de los binarios globales del sistema
+// Esto asegura compatibilidad total con tu Debian Slim y tu procesador Phenom 955
+ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
+ffmpeg.setFfprobePath('/usr/bin/ffprobe');
+
 const DB_PATH = path.join(process.cwd(), 'processed_videos.json');
 const MAX_PER_RUN = 10;  // Límite por ejecución
 
@@ -41,7 +46,8 @@ const optimizeVideo = (videoPath) => {
         const ext = path.extname(videoPath);
         const baseName = path.basename(videoPath, ext);
 
-        const tempPath = path.join(dir, `${baseName}_opt.tmp.mp4`);
+        // Nombres de los archivos temporales y finales
+        const tempPath = path.join(dir, `optimized_temp_${Date.now()}.mp4`);
         const finalPath = path.join(dir, `${baseName}.mp4`);
 
         ffmpeg.ffprobe(videoPath, (err, metadata) => {
@@ -138,7 +144,7 @@ async function ejecutarMantenimiento(currentPath, processedList, state) {
             }
 
         } catch (error) {
-            console.error(`❌ Falló: ${video.name}`, error.message);
+            console.error(`❌ Falló: ${video.name}`);
         }
     }
 
