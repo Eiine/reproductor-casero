@@ -12,7 +12,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // 🔧 CONFIGURACIÓN PARA DOCKER: Forzamos el uso de los binarios globales del sistema
-// Esto asegura compatibilidad total con tu Debian Slim y tu procesador Phenom 955
 ffmpeg.setFfmpegPath('/usr/bin/ffmpeg');
 ffmpeg.setFfprobePath('/usr/bin/ffprobe');
 
@@ -68,14 +67,17 @@ const optimizeVideo = (videoPath) => {
                 ffmpeg(videoPath)
                     .outputOptions([
                         '-c:v libx264',
-                        '-profile:v high',
-                        '-level:v 4.0',
+                        '-preset ultrafast',   // ⚡ Alivia los hilos del micro para evitar cuelgues
                         '-crf 23',
-                        '-preset fast',
+                        '-profile:v high',     // Perfil High compatible gracias al remuestreo inferior
+                        '-level:v 4.0',
+                        '-pix_fmt yuv420p',    // 🚀 CLAVE: Aplana los 10 bits a 8 bits estándar de HTML5
                         '-c:a aac',
                         '-ar 44100',
                         '-b:a 125k',
                         '-ac 2',
+                        '-sn',                 // 🚫 Ignora subtítulos embebidos en MKV que rompen la salida
+                        '-dn',                 // 🚫 Ignora flujos de datos extraños
                         '-movflags +faststart'
                     ])
                     .on('end', async () => {
@@ -144,7 +146,7 @@ async function ejecutarMantenimiento(currentPath, processedList, state) {
             }
 
         } catch (error) {
-            console.error(`❌ Falló: ${video.name}`);
+            console.error(`❌ Falló definitivamente: ${video.name}`);
         }
     }
 

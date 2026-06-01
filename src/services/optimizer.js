@@ -28,14 +28,14 @@ class OptimizerQueue {
         this.activeProcesses = 0;
         this.queue = [];
     }
-    
+
     async execute(task) {
         if (this.activeProcesses >= MAX_CONCURRENT_OPTIMIZATIONS) {
             return new Promise((resolve) => {
                 this.queue.push(() => task().then(resolve));
             });
         }
-        
+
         this.activeProcesses++;
         try {
             return await task();
@@ -74,14 +74,14 @@ async function saveProcessed(videoPath) {
 // 🔥 FFPROBE CON PROCESO CONTROLADO (sin zombies)
 const getVideoInfo = (videoPath) => {
     return new Promise((resolve, reject) => {
-        const isSlowDisk = videoPath.includes('/mnt/') || 
-                          videoPath.includes('/media/') ||
-                          !videoPath.includes('/ssd/');
-        
+        const isSlowDisk = videoPath.includes('/mnt/') ||
+            videoPath.includes('/media/') ||
+            !videoPath.includes('/ssd/');
+
         const probeTimeout = isSlowDisk ? 20000 : 10000;
-        
+
         console.log(`    🔍 [Probe] Analizando: ${path.basename(videoPath)} (${isSlowDisk ? 'HDD' : 'SSD'})`);
-        
+
         const probeProcess = spawn(FFPROBE_PATH, [
             '-v', 'quiet',
             '-print_format', 'json',
@@ -92,11 +92,11 @@ const getVideoInfo = (videoPath) => {
             stdio: ['ignore', 'pipe', 'pipe'],
             detached: false
         });
-        
+
         let output = '';
         let errorOutput = '';
         let isResolved = false;
-        
+
         const timeout = setTimeout(() => {
             if (!isResolved) {
                 console.error(`    ⏰ [Probe] Timeout después de ${probeTimeout}ms`);
@@ -112,8 +112,8 @@ const getVideoInfo = (videoPath) => {
                 isResolved = true;
             }
         }, probeTimeout);
-        
-        probeProcess.stdout.on('data', (data) => { 
+
+        probeProcess.stdout.on('data', (data) => {
             output += data;
             if (output.length > 10 * 1024 * 1024) {
                 if (!isResolved) {
@@ -123,11 +123,11 @@ const getVideoInfo = (videoPath) => {
                 }
             }
         });
-        
-        probeProcess.stderr.on('data', (data) => { 
+
+        probeProcess.stderr.on('data', (data) => {
             errorOutput += data;
         });
-        
+
         probeProcess.on('close', (code) => {
             clearTimeout(timeout);
             if (!isResolved) {
@@ -146,7 +146,7 @@ const getVideoInfo = (videoPath) => {
                 isResolved = true;
             }
         });
-        
+
         probeProcess.on('error', (err) => {
             clearTimeout(timeout);
             if (!isResolved) {
@@ -155,7 +155,7 @@ const getVideoInfo = (videoPath) => {
                 isResolved = true;
             }
         });
-        
+
         process.on('exit', () => {
             if (probeProcess && !probeProcess.killed) {
                 probeProcess.kill('SIGKILL');
@@ -168,13 +168,13 @@ const getVideoInfo = (videoPath) => {
 const needsOptimization = (metadata, ext) => {
     const vStream = metadata.streams.find(s => s.codec_type === 'video');
     const aStream = metadata.streams.find(s => s.codec_type === 'audio');
-    
+
     const isMP4 = ext.toLowerCase() === '.mp4';
     const isH264 = vStream?.codec_name === 'h264';
     const isAAC = aStream?.codec_name === 'aac';
     const isLevelOk = vStream?.level <= 40;
     const isAudioOk = parseInt(aStream?.sample_rate) <= 44100;
-    
+
     return !(isMP4 && isH264 && isAAC && isLevelOk && isAudioOk);
 };
 
@@ -183,22 +183,25 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
     return new Promise((resolve, reject) => {
         let ffmpegProcess = null;
         let isResolved = false;
-        
+
         console.log(`    🎬 [Encode] Iniciando codificación H264/AAC...`);
         console.log(`    ⏱️  [Encode] Sin límite de tiempo - el proceso durará lo necesario`);
-        
+
         ffmpegProcess = ffmpeg(videoPath)
             .output(tempPath)
             .outputOptions([
                 '-c:v libx264',
-                '-profile:v high',
-                '-level:v 4.0',
+                '-preset ultrafast',  // Ideal para la carga del Phenom 955
                 '-crf 23',
-                '-preset superfast',
+                '-profile:v high',    // Ahora sí va a funcionar perfecto
+                '-level:v 4.0',
+                '-pix_fmt yuv420p',   // 🚀 CLAVE: Aplana los 10 bits a 8 bits compatibles
                 '-c:a aac',
                 '-ar 44100',
                 '-b:a 125k',
                 '-ac 2',
+                '-sn',                // Ignora los subtítulos .ass que traían fuentes adjuntas (.ttf)
+                '-dn',
                 '-movflags +faststart'
             ])
             .on('start', (commandLine) => {
@@ -212,24 +215,24 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
             .on('end', async () => {
                 if (isResolved) return;
                 isResolved = true;
-                
+
                 console.log(`    ✅ [Encode] Codificación completada`);
-                
+
                 try {
                     const stats = await fs.stat(tempPath);
                     if (stats.size === 0) {
                         throw new Error('El archivo temporal está vacío');
                     }
-                    
+
                     console.log(`    🗑️  Eliminando versión antigua...`);
                     await fs.unlink(videoPath);
-                    
+
                     console.log(`    ♻️  Estableciendo versión optimizada...`);
                     await fs.rename(tempPath, finalPath);
-                    
+
                     console.log(`    💾 Guardando en registro...`);
                     await saveProcessed(finalPath);
-                    
+
                     resolve(true);
                 } catch (e) {
                     console.error(`    ❌ [Encode] Error en post-procesamiento:`, e.message);
@@ -239,9 +242,9 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
             .on('error', async (e) => {
                 if (isResolved) return;
                 isResolved = true;
-                
+
                 console.error(`    ❌ [Encode] Error FFmpeg:`, e.message);
-                
+
                 try {
                     if (existsSync(tempPath)) {
                         await fs.unlink(tempPath);
@@ -250,19 +253,19 @@ const encodeVideo = (videoPath, tempPath, finalPath) => {
                 } catch (cleanErr) {
                     console.error(`    ⚠️ No se pudo limpiar temporal:`, cleanErr.message);
                 }
-                
+
                 reject(e);
             });
-            
+
         ffmpegProcess.run();
-        
+
         const cleanExit = () => {
             if (ffmpegProcess && ffmpegProcess.ffmpegProc && !ffmpegProcess.ffmpegProc.killed) {
                 console.log(`    🧹 Limpiando proceso FFmpeg huérfano...`);
                 ffmpegProcess.ffmpegProc.kill('SIGKILL');
             }
         };
-        
+
         process.on('exit', cleanExit);
         process.on('SIGINT', cleanExit);
         process.on('SIGTERM', cleanExit);
@@ -275,42 +278,42 @@ const optimizeVideo = async (videoPath) => {
         const dir = path.dirname(videoPath);
         const ext = path.extname(videoPath);
         const baseName = path.basename(videoPath, ext);
-        
+
         // Estabilizamos el nombre del temporal usando marcas de tiempo para evitar colisiones
         const tempPath = path.join(dir, `optimized_temp_${Date.now()}.mp4`);
         const finalPath = path.join(dir, `${baseName}.mp4`);
-        
+
         console.log(`\n🎬 [Optimizer] Procesando: ${baseName}${ext}`);
-        
+
         try {
             const metadata = await getVideoInfo(videoPath);
-            
+
             if (!needsOptimization(metadata, ext)) {
                 console.log(`✅ [Optimizer] Ya optimizado: ${baseName}${ext}`);
                 await saveProcessed(videoPath);
                 return false;
             }
-            
+
             if (existsSync(tempPath)) {
                 console.log(`    🧹 Limpiando temporal huérfano: ${path.basename(tempPath)}`);
                 await fs.unlink(tempPath);
             }
-            
+
             console.log(`🛠️  [Optimizer] Recodificando: ${baseName}${ext}`);
             const result = await encodeVideo(videoPath, tempPath, finalPath);
-            
+
             console.log(`✅ [Optimizer] Finalizado: ${baseName}.mp4`);
             return result;
-            
+
         } catch (error) {
             console.error(`❌ [Optimizer] Falló ${baseName}:`, error.message);
-            
+
             try {
                 if (existsSync(tempPath)) {
                     await fs.unlink(tempPath);
                 }
-            } catch {}
-            
+            } catch { }
+
             throw error;
         }
     });
@@ -339,7 +342,7 @@ async function ejecutarMantenimiento(currentPath, processedList, state) {
                 state.processedToday++;
                 console.log(`\n📊 Procesados en esta ejecución: ${state.processedToday}/${MAX_PER_RUN}`);
             }
-            
+
             if (wasProcessed && state.processedToday < MAX_PER_RUN) {
                 console.log(`⏸️  Esperando 2 segundos antes del siguiente video...`);
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -361,35 +364,35 @@ async function ejecutarMantenimiento(currentPath, processedList, state) {
 // --- LIMPIAR TEMPORALES HUÉRFANOS ---
 async function limpiarTemporalesHuérfanos(directory) {
     console.log('🧹 Buscando archivos temporales huérfanos...');
-    
+
     const limpiarRecursivo = async (dir) => {
         try {
             const files = await fs.readdir(dir);
             for (const file of files) {
                 const fullPath = path.join(dir, file);
                 const stat = await fs.stat(fullPath).catch(() => null);
-                
+
                 if (stat && stat.isDirectory()) {
                     await limpiarRecursivo(fullPath);
                 } else if (file.includes('optimized_temp_') || file.includes('_opt.tmp.mp4')) {
                     console.log(`    🗑️ Eliminando temporal huérfano: ${file}`);
-                    await fs.unlink(fullPath).catch(() => {});
+                    await fs.unlink(fullPath).catch(() => { });
                 }
             }
         } catch (error) {
             // Ignorar errores de permisos
         }
     };
-    
+
     await limpiarRecursivo(directory);
-    
+
     console.log('🧹 Verificando procesos FFmpeg zombies...');
     try {
         const { exec } = await import('child_process');
         const isWin = process.platform === 'win32';
-        
-        const cmd = isWin 
-            ? 'taskkill /f /im ffmpeg.exe' 
+
+        const cmd = isWin
+            ? 'taskkill /f /im ffmpeg.exe'
             : 'pkill -f "ffmpeg.*optimized_temp_"';
 
         exec(cmd, (error) => {
@@ -399,18 +402,18 @@ async function limpiarTemporalesHuérfanos(directory) {
                 console.log('    🗑️ Procesos zombies eliminados del sistema');
             }
         });
-    } catch (e) {}
-    
+    } catch (e) { }
+
     console.log('✅ Limpieza completada\n');
 }
 
 // --- FUNCIÓN PRINCIPAL DEL CRON ---
 async function runOptimization() {
     console.log('🌙 [Cron] Iniciando mantenimiento...');
-    
+
     const usedRAM = process.memoryUsage().rss / 1024 / 1024;
     console.log(`📊 Estado del sistema - RAM: ${Math.round(usedRAM)}MB / 4096MB`);
-    
+
     if (usedRAM > 3500) {
         console.error('⚠️ RAM crítica (>3.5GB), abortando optimización');
         return;
@@ -423,23 +426,23 @@ async function runOptimization() {
 
     try {
         await limpiarTemporalesHuérfanos(videoFolder);
-        
+
         const processedList = await getProcessedVideos();
         console.log(`📋 Videos ya procesados históricamente: ${processedList.length}`);
-        
+
         const state = { processedToday: 0 };
         const startTime = Date.now();
-        
+
         await ejecutarMantenimiento(videoFolder, processedList, state);
-        
+
         const endTime = Date.now();
         const duration = ((endTime - startTime) / 1000).toFixed(2);
-        
+
         console.log('\n🏁 === RESUMEN DE EJECUCIÓN ===');
         console.log(`✅ Videos procesados hoy: ${state.processedToday}/${MAX_PER_RUN}`);
         console.log(`⏱️  Tiempo total: ${duration} segundos`);
         console.log(`💾 RAM utilizada: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`);
-        
+
         if (state.processedToday === MAX_PER_RUN) {
             console.log(`📌 Se alcanzó el límite de ${MAX_PER_RUN} videos por ejecución`);
         }
@@ -454,14 +457,14 @@ export const startOptimizationCron = () => {
     console.log(`⏰ Cron activo (máx ${MAX_PER_RUN} videos por día a las 04:02 PM)`);
     console.log(`⚙️  Configuración para hardware limitado: ${MAX_CONCURRENT_OPTIMIZATIONS} optimización concurrente`);
     console.log(`✅ Sin límite de tiempo para codificación - los videos tardarán lo necesario`);
-    
+
     cron.schedule('2 16 * * *', async () => {
         console.log('\n' + '='.repeat(50));
         console.log(`🕒 Ejecución programada: ${new Date().toLocaleString()}`);
         console.log('='.repeat(50));
-        
+
         await runOptimization();
-        
+
         console.log('='.repeat(50));
         console.log(`🏁 Cron finalizado: ${new Date().toLocaleString()}`);
         console.log('='.repeat(50) + '\n');
